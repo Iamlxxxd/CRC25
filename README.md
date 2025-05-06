@@ -20,7 +20,7 @@ Welcome to the official repository for the **Counterfactual Routing Competition 
 
 ## About the Competition
 
-The CRC is part of IJCAI 2025, taking place in Montreal, Canada, from August 16–22, 2025. For more details and updates, please visit the competition website: **[TBD]**.
+The CRC is part of IJCAI 2025, taking place in Montreal, Canada, from August 16–22, 2025. For more details and updates, please visit the competition website: [https://sites.google.com/view/crc25-ijcai/rules-and-guidelines](https://sites.google.com/view/crc25-ijcai/rules-and-guidelines).
 
 This competition focuses on explainable AI in the context of personalized route planning. Participants will be tasked with answering the following user-centric question:
 
@@ -88,7 +88,7 @@ pip install -r requirements.txt
 
 A baseline implementation using local search is provided in the repository:
 
-- **Notebook**: `ls_demon.ipynb`
+- **Notebook**: `ls_demo.ipynb`
 
 This notebook demonstrates a simple approach for generating counterfactual maps. Participants are encouraged to use this as a starting point and improve upon it.
 
@@ -96,7 +96,10 @@ This notebook demonstrates a simple approach for generating counterfactual maps.
 
 ## Contact
 
-For questions or further information, please refer to the competition website (**[TBD]**) or contact the organizers.
+Please send us your contribution via: crc25ijcai@gmail.com
+
+If you are interested in competing, please notify us with a short email ahead of time as well.
+
 
 
 
