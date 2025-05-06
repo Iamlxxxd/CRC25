@@ -64,7 +64,7 @@ Participants will be provided with:
 
 **Submission Instructions:**
 
-- Please send your contribution via: **[TBD]**
+- Please send your contribution via: **crc25ijcai@gmail.com**
 - Each team must submit:
     - **Code base** for your solution
     - **Report (2–4 pages)** in the default IJCAI 2025 template, following academic standards.
