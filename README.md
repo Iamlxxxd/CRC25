@@ -1,8 +1,9 @@
 
-TODO: revise readme
 # Counterfactual Routing Competition (CRC)
 
-Welcome to the official repository for the **Counterfactual Routing Competition (CRC)**, held at [IJCAI 2025](https://2025.ijcai.org/), the premier international conference for artificial intelligence research. CRC challenges participants to generate insightful, counterfactual explanations for personalized route planning.
+Welcome to the official repository for the [**Counterfactual Routing Competition (CRC)**](https://sites.google.com/view/crc25-ijcai/home), held at [IJCAI 2025](https://2025.ijcai.org/), the premier international conference for artificial intelligence research. CRC challenges participants to generate insightful, counterfactual explanations for personalized route planning.
+
+>This competition is organised in the context of the European [PEER project](https://peer-ai.eu/en/), and includes organisers from the [municipality of Amsterdam](https://amsterdamintelligence.com/posts/creating-a-personalized-route-planner-for-less-mobile-people). The maps/graphs are based on real-world data and were created by the municipality of Amsterdam, using various techniques including point-cloud based obstacle and [width measurements](https://amsterdamintelligence.com/resources/accessible-sidewalk-width) and recognising suitable crossings from satellite imagery ([Link1](https://amsterdamintelligence.com/posts/where-not-to-cross-the-street), [Link2](https://bnaic2024.sites.uu.nl/wp-content/uploads/sites/986/2024/11/Where-Not-to-Cross-the-Street.pdf?)). The competition focuses on key AI components of explainable routing by providing counterfactual explanations, and its results may be used (attributed of course) in a demonstrator for accessible route planning. The competition is run open-source.
 
 ---
 
@@ -14,7 +15,6 @@ Welcome to the official repository for the **Counterfactual Routing Competition 
 - [Getting Started](#getting-started)
 - [Baseline Solution](#baseline-solution)
 - [Requirements](#requirements)
-- [Contact](#contact)
 
 ---
 
@@ -68,6 +68,9 @@ Participants will be provided with:
 - Each team must submit:
     - **Code base** for your solution
     - **Report (2–4 pages)** in the default IJCAI 2025 template, following academic standards.
+
+If you are interested in competing, please notify us with a short email ahead of time as well.
+
 ---
 
 ## Getting Started
@@ -94,20 +97,9 @@ This notebook demonstrates a simple approach for generating counterfactual maps.
 
 ---
 
-## Contact
-
-Please send us your contribution via: crc25ijcai@gmail.com
-
-If you are interested in competing, please notify us with a short email ahead of time as well.
-
-
-
-
----
-
 *We look forward to your participation and innovative solutions at CRC, IJCAI 2025!*
 
 ---
-This competition is organised in the context of the European PEER project, and includes organisers from the municipality of Amsterdam. The maps/graphs are based on real-world data and were created by the municipality of Amsterdam, using various techniques including point-cloud based obstacle and width measurements and recognising suitable crossings from satellite imagery (Link1, Link2). The competition focuses on key AI components of explainable routing by providing counterfactual explanations, and its results may be used (attributed of course) in a demonstrator for accessible route planning. The competition is run open-source.
+
 
 
