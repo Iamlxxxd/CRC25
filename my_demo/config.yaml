@@ -1,0 +1,17 @@
+paths:
+  basic_network_path: demo_walk/network_demo_walk_3
+  foil_json_path: demo_walk/route_nodes_demo_walk_3.json
+  df_path_foil_path: demo_walk/route_demo_walk_3
+  gdf_coords_path: demo_walk/route_demo_walk_3_start_end.csv
+  meta_data_path: demo_walk/metadata_demo_walk_3.json
+  store_path: demo_walk/outputs/
+
+params:
+  heuristic: dijkstra
+  heuristic_f: my_weight
+  jobs: 1
+  n_perturbation: 50
+  operator_p: [0.15, 0.15, 0.15, 0.15, 0.4]
+  gen_num: 10000
+  lagrangian_lambda: 2000
+  time_limit: 120  # 单位：秒

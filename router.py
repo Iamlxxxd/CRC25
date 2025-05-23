@@ -23,10 +23,10 @@ class Router:
                         key=lambda x: x.get(heuristic_f, 1))
             edge_route.append((u, v, min_edge))
 
-            # Create a new graph with only the relevant edges
-            G_route = nx.DiGraph() if G.is_directed() else nx.Graph()
-            G_route.add_nodes_from(node_route)
-            G_route.add_edges_from([(u, v, attr) for u, v, attr in edge_route])
+        # Create a new graph with only the relevant edges
+        G_route = nx.DiGraph() if G.is_directed() else nx.Graph()
+        G_route.add_nodes_from(node_route)
+        G_route.add_edges_from([(u, v, attr) for u, v, attr in edge_route])
 
             # Convert to GeoDataFrame
         G_route.graph["approach"] = "primal"
