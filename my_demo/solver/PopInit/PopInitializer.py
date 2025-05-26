@@ -8,7 +8,6 @@
 from geopandas import GeoDataFrame
 from networkx.classes import DiGraph
 
-from my_demo.solver.DESolver import DESolver
 from my_demo.solver.Individual import Individual
 from my_demo.solver.PopInit.InitFromRandom import InitFromRandom
 from router import Router
@@ -19,11 +18,9 @@ import math
 
 
 class PopInitializer:
-    solver: DESolver
+    init_strategy_list = []
 
-    init_strategy_list: list
-
-    def __init__(self, solver: DESolver):
+    def __init__(self, solver):
         self.solver = solver
         self.__set_strategy_list()
 
@@ -31,7 +28,7 @@ class PopInitializer:
         self.init_strategy_list.append(InitFromRandom(self.solver))
         # todo other
 
-    def heuristicInitPop(self):
+    def heuristic_init_pop(self):
         pop_size = self.solver.pop_size
         gradient = int(math.ceil(pop_size / len(self.init_strategy_list)))
         left = 0

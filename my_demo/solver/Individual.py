@@ -29,10 +29,10 @@ class Individual:
 
     route_error: float
 
-    obj : float
+    obj: float
 
     def __init__(self, org_geo_df: GeoDataFrame, user_model: dict):
-        self.org_geo_df = org_geo_df
+        self.org_df = org_geo_df
         self.user_model = user_model
         self.create_network_graph()
 
@@ -42,4 +42,4 @@ class Individual:
         """
         weight_df = deepcopy(self.org_df)
         self.weight_df = handle_weight_with_recovery(weight_df, self.user_model)
-        self.network = create_network_graph(self.weight_df)
+        _, self.network = create_network_graph(self.weight_df)

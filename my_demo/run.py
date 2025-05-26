@@ -1,12 +1,12 @@
 import os
 import yaml
-from my_demo.data_loader import DataLoader
+from my_demo.config import Config
 import sys
 import os
 import random
 import numpy as np
 sys.path.append("..")
-
+from my_demo.solver.DESolver import DESolver
 
 def set_seed(seed=7):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -30,25 +30,26 @@ def main():
     base_dir = os.path.abspath(base_dir)
 
     # 初始化DataLoader，传入base_dir
-    data_loader = DataLoader(config, base_dir=base_dir)
+    config = Config(config, base_dir=base_dir)
 
     # 构造args
     args = {
-        'basic_network_path': data_loader.basic_network_path,
-        'foil_json_path': data_loader.foil_json_path,
-        'df_path_foil_path': data_loader.df_path_foil_path,
-        'gdf_coords_path': data_loader.gdf_coords_path,
-        'heuristic': data_loader.heuristic,
-        'heuristic_f': data_loader.heuristic_f,
-        'jobs': data_loader.jobs,
-        'attrs_variable_names': data_loader.attrs_variable_names,
-        "n_perturbation": data_loader.n_perturbation,
-        "operator_p": data_loader.operator_p,
-        "user_model": data_loader.user_model,
-        "meta_map": data_loader.meta_map
+        'basic_network_path': config.basic_network_path,
+        'foil_json_path': config.foil_json_path,
+        'df_path_foil_path': config.df_path_foil_path,
+        'gdf_coords_path': config.gdf_coords_path,
+        'heuristic': config.heuristic,
+        'heuristic_f': config.heuristic_f,
+        'jobs': config.jobs,
+        'attrs_variable_names': config.attrs_variable_names,
+        "n_perturbation": config.n_perturbation,
+        "operator_p": config.operator_p,
+        "user_model": config.user_model,
+        "meta_map": config.meta_map
     }
 
-
+    solver = DESolver(config)
+    solver.run()
 
 if __name__ == "__main__":
     main()

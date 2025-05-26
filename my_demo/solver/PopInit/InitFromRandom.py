@@ -8,7 +8,6 @@
 from geopandas import GeoDataFrame
 from networkx.classes import DiGraph
 
-from my_demo.solver.DESolver import DESolver
 from my_demo.solver.FitMeasurer import CALC_INF
 from my_demo.solver.Individual import Individual
 from router import Router
@@ -20,11 +19,10 @@ from utils.graph_op import graphOperator
 
 
 class InitFromRandom:
-    solver: DESolver
 
     init_strategy_list: list
 
-    def __init__(self, solver: DESolver):
+    def __init__(self, solver):
         self.solver = solver
 
     def do_init_pop(self, left, right):
@@ -68,8 +66,8 @@ class InitFromRandom:
                     result = operator(edge, df_perturbed, step)
                 op_list.append((operator_name, (edge_index, edge["geometry"]), step, result))
 
-            individual = Individual(df_perturbed, self.solver.user_model)
-            individual.create_network_graph()
+            individual = Individual(df_perturbed, self.solver.config.user_model)
+            # individual.create_network_graph()
 
             cost = self.solver.fit_measurer.do_measure(individual)
             if cost >= CALC_INF:

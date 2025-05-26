@@ -2,9 +2,11 @@ import os
 import json
 import pandas as pd
 import geopandas as gpd
+from geopandas import GeoDataFrame
 from shapely import wkt
 
-class DataLoader:
+
+class Config:
     def __init__(self, config, base_dir=None):
         self.config = config
         self.paths = config['paths']
@@ -27,15 +29,15 @@ class DataLoader:
         # 基础网络文件路径
         self.basic_network_path = self._full_path(self.paths['basic_network_path'])
         # 基础网络数据（GeoDataFrame）
-        self.basic_network = gpd.read_file(self.basic_network_path)
+        self.basic_network: GeoDataFrame = gpd.read_file(self.basic_network_path)
 
         # 起终点坐标csv路径
         self.gdf_coords_path = self._full_path(self.paths['gdf_coords_path'])
         # 起终点坐标（DataFrame）
-        self.gdf_coords_loaded = pd.read_csv(self.gdf_coords_path, sep=';')
+        self.gdf_coords_loaded: pd.DataFrame = pd.read_csv(self.gdf_coords_path, sep=';')
         self.gdf_coords_loaded['geometry'] = self.gdf_coords_loaded['geometry'].apply(wkt.loads)
         # 起终点坐标（GeoDataFrame）
-        self.gdf_coords_loaded = gpd.GeoDataFrame(self.gdf_coords_loaded, geometry='geometry')
+        self.gdf_coords_loaded: GeoDataFrame = gpd.GeoDataFrame(self.gdf_coords_loaded, geometry='geometry')
 
     def load_foil_data(self):
         # foil路径节点json文件路径
@@ -47,7 +49,7 @@ class DataLoader:
         # foil路径文件路径
         self.df_path_foil_path = self._full_path(self.paths['df_path_foil_path'])
         # foil路径数据（GeoDataFrame）
-        self.df_path_foil = gpd.read_file(self.df_path_foil_path)
+        self.df_path_foil: GeoDataFrame = gpd.read_file(self.df_path_foil_path)
 
         # 元数据json路径
         self.meta_data_path = self._full_path(self.paths['meta_data_path'])
@@ -84,4 +86,3 @@ class DataLoader:
         self.time_limit = self.config['params']['time_limit']
         # 结果存储路径
         self.store_path = self._full_path(self.config['paths'].get('store_path', './outputs/'))
-

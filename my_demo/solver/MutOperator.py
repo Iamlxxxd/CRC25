@@ -8,8 +8,7 @@
 from geopandas import GeoDataFrame
 from networkx.classes import DiGraph
 
-from DESolver import DESolver
-from Individual import Individual
+from my_demo.solver.Individual import Individual
 from router import Router
 from typing import List, Tuple
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
@@ -17,15 +16,22 @@ import random
 
 
 class MutOperator:
-    solver: DESolver
 
-    def __init__(self, solver: DESolver):
+    def __init__(self, solver):
         self.solver = solver
 
     def do_move(self):
         self.edge_mutation()
 
     def edge_mutation(self, row_num: int = None):
+        """
+
+        Args:
+            row_num:随机抽取指定数量的边进行计算
+
+        Returns:
+
+        """
         pop = self.solver.pop
         mut_pop = []
         F = self.solver.F
@@ -66,15 +72,21 @@ class MutOperator:
                 else:
                     calc_col = v1 + F * (v2 - v3)
                     lb, ub = map_constraint[col]["bound"]
+                    # todo 超过边界 维持为r1 但需要考虑是不是选一个最好的
                     calc_col = calc_col.where((calc_col <= ub) & (calc_col >= lb), v1)
                     # 只对chosen_idx批量赋值
                     new_col.loc[chosen_idx] = calc_col.loc[chosen_idx]
                     new_df[col] = new_col
 
-            new_ind = Individual(new_df, self.solver.user_model)
-            new_ind.create_network_graph()
+            new_ind = Individual(new_df, self.solver.config.user_model)
+            # new_ind.create_network_graph()
 
-            self.solver.fit_measurer.do_measure(new_ind)
-            mut_pop.append(new_ind)
+            cost = self.solver.fit_measurer.do_measure(new_ind)
+
+            if cost >= self.solver.fit_measurer.CALC_INF:
+                # todo 找不到路径维持r1 但需要考虑是不是选一个最好的
+                mut_pop.append(r1.route_df.copy())
+            else:
+                mut_pop.append(new_ind)
 
         self.solver.mut_pop = mut_pop

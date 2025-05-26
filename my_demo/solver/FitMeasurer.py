@@ -5,26 +5,23 @@
 @time   :    2025/5/22 15:53
 @project:    CRC25
 """
+import numpy as np
 from geopandas import GeoDataFrame
 from networkx.classes import DiGraph
-
-from DESolver import DESolver
-from Individual import Individual
+import traceback
+from my_demo.solver.Individual import Individual
 from router import Router
 from typing import List, Tuple
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
 # 极大值
-CALC_INF = int(float('inf') / 2)
+CALC_INF = int(np.finfo(np.float64).max / 2)
 
 
 class FitMeasurer:
-    solver: DESolver
-    router: Router
 
-    def __init__(self, solver: DESolver):
+    def __init__(self, solver):
         self.solver = solver
-        self.router = Router(heuristic=solver.heuristic, CRS=solver.meta_map["CRS"], CRS_map=solver.meta_map["CRS_map"])
 
     def do_measure(self, individual: Individual) -> float:
         null_solution_flag = self.calc_gen_obj(individual)
@@ -35,21 +32,24 @@ class FitMeasurer:
 
     def calc_gen_obj(self, individual: Individual):
         try:
-            path_list, path_graph, path_df = self.router.get_route(individual.weight_df,
-                                                                   self.solver.origin_node,
-                                                                   self.solver.dest_node,
-                                                                   self.solver.heuristic_f)
+            path_list, path_graph, path_df = self.solver.router.get_route(individual.network,
+                                                                          self.solver.origin_node,
+                                                                          self.solver.dest_node,
+                                                                          self.solver.heuristic_f)
 
             route_error = 1 - common_edges_similarity_route_df_weighted(path_df,
-                                                                        self.solver.df_path_foil,
-                                                                        self.solver.attrs_variable_names)
+                                                                        self.solver.config.df_path_foil,
+                                                                        self.solver.config.attrs_variable_names)
 
-            sub_op_list = get_virtual_op_list(individual.org_df, individual.weight_df, self.attrs_variable_names)
+            sub_op_list = get_virtual_op_list(individual.org_df,
+                                              individual.weight_df,
+                                              self.solver.config.attrs_variable_names)
 
             individual.route_error = route_error
             individual.graph_error = len([op for op in sub_op_list if op[3] == "success"])
             return True
         except Exception as e:
+            traceback.print_exc()
             return False
 
     def obj_to_cost(self, individual: Individual) -> float:
