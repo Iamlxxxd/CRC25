@@ -5,26 +5,25 @@
 @time   :    2025/5/22 16:02
 @project:    CRC25
 """
-from networkx.classes import DiGraph
-
-from my_demo.solver.Individual import Individual
+from copy import deepcopy
 from typing import List
+from tqdm import tqdm
 from geopandas import GeoDataFrame
+from networkx.classes import DiGraph
 
 from my_demo.config import Config
 from my_demo.solver.CrossOperator import CrossOperator
 from my_demo.solver.FitMeasurer import FitMeasurer
+from my_demo.solver.Individual import Individual
 from my_demo.solver.MutOperator import MutOperator
 from my_demo.solver.PopInit.PopInitializer import PopInitializer
 from my_demo.solver.SelectOperator import SelectOperator
 from router import Router
-from geopandas import GeoDataFrame
-from jupyter_server.auth import User
-from networkx.classes import MultiDiGraph
+from utils.dataparser import create_network_graph, handle_weight
+import numpy as np
 
-from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
+from my_demo.solver.Individual import Individual
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
-from copy import deepcopy
 
 
 class DESolver:
@@ -39,9 +38,15 @@ class DESolver:
     heuristic = "dijkstra"
 
     pop_size = 50
+    # 极大值
+    CALC_INF = int(np.finfo(np.float64).max / 2)
+
     pop: List[Individual] = [None] * pop_size
     mut_pop: List[Individual] = [None] * pop_size
     cross_pop: List[Individual] = [None] * pop_size
+
+    best_individual: Individual = None
+    each_iter_best_individual: List[Individual] = []
 
     map_constraint: dict = {
         "obstacle_free_width_float": {"bound": [0.6, 2]},
@@ -56,8 +61,12 @@ class DESolver:
     ]
 
     F: float = 0.5
-    PROB_CROSS: float = 0.001,
+    PROB_CROSS: float = 0.2
     MAX_ITER: int = 2000
+
+    no_improve_count: int = 0
+    no_improve_time_rate: float = 0.2
+
     lagrangian_lambda: int = 2000
 
     router: Router
@@ -75,6 +84,8 @@ class DESolver:
         self.cross_operator = CrossOperator(self)
         self.select_operator = SelectOperator(self)
 
+        self.no_improve_count = 0  # 新增：记录best_individual未更新次数
+
     def load_basic_data(self):
         self.org_map_df = self.config.basic_network
         df_copy = deepcopy(self.org_map_df)
@@ -88,7 +99,33 @@ class DESolver:
         self.initializer.heuristic_init_pop()
 
         self.MAX_ITER = max_iter or self.MAX_ITER
-        for i in range(self.MAX_ITER):
+
+        pbar = tqdm(range(self.MAX_ITER))
+        for i in pbar:
             self.mut_operator.do_move()
             self.cross_operator.do_move()
             self.select_operator.do_move()
+            # rank
+            self.pop = sorted(self.pop, key=lambda x: x.obj)
+
+            current_best = self.pop[0]
+            if self.best_individual is None \
+                    or current_best.obj < self.best_individual.obj:
+
+                best_cp = deepcopy(current_best)
+                self.best_individual = best_cp
+                self.each_iter_best_individual.append(best_cp)
+                self.no_improve_count = 0
+            else:
+                self.each_iter_best_individual.append(self.best_individual)
+                self.no_improve_count += 1
+
+            pbar.set_postfix({'obj': str(self.best_individual)})
+            if self.termination_trigger(i):
+                break
+
+    def termination_trigger(self, iter_times: int) -> bool:
+        if self.no_improve_count >= self.MAX_ITER * self.no_improve_time_rate:
+            return True
+
+        return False

@@ -50,6 +50,8 @@ def main():
 
     solver = DESolver(config)
     solver.run()
+    #todo solution
+    print("DONE")
 
 if __name__ == "__main__":
     main()

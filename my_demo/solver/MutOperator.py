@@ -5,14 +5,10 @@
 @time   :    2025/5/22 18:33
 @project:    CRC25
 """
-from geopandas import GeoDataFrame
-from networkx.classes import DiGraph
+
+import random
 
 from my_demo.solver.Individual import Individual
-from router import Router
-from typing import List, Tuple
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
-import random
 
 
 class MutOperator:
@@ -41,7 +37,7 @@ class MutOperator:
         for i in range(self.solver.pop_size):
             triple = random.sample(pop, 3)
             r1, r2, r3 = triple[0], triple[1], triple[2]
-            new_df = r1.route_df.copy()
+            new_df = r1.weight_df.copy()
             # 随机抽取row_num个索引
             if row_num is not None and row_num < len(new_df):
                 chosen_idx = random.sample(list(new_df.index), row_num)
@@ -49,9 +45,9 @@ class MutOperator:
                 chosen_idx = list(new_df.index)
 
             for col in operate_columns:
-                v1 = r1.route_df[col]
-                v2 = r2.route_df[col]
-                v3 = r3.route_df[col]
+                v1 = r1.weight_df[col]
+                v2 = r2.weight_df[col]
+                v3 = r3.weight_df[col]
                 new_col = v1.copy()
                 if col == "path_type":
                     options = map_constraint[col]["categorical_options"]
@@ -83,9 +79,9 @@ class MutOperator:
 
             cost = self.solver.fit_measurer.do_measure(new_ind)
 
-            if cost >= self.solver.fit_measurer.CALC_INF:
+            if cost >= self.solver.CALC_INF:
                 # todo 找不到路径维持r1 但需要考虑是不是选一个最好的
-                mut_pop.append(r1.route_df.copy())
+                mut_pop.append(r1.weight_df.copy())
             else:
                 mut_pop.append(new_ind)
 

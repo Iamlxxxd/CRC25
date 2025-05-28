@@ -5,13 +5,11 @@
 @time   :    2025/5/22 15:53
 @project:    CRC25
 """
-import numpy as np
-from geopandas import GeoDataFrame
-from networkx.classes import DiGraph
 import traceback
+
+import numpy as np
+
 from my_demo.solver.Individual import Individual
-from router import Router
-from typing import List, Tuple
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
 # 极大值
@@ -41,7 +39,7 @@ class FitMeasurer:
                                                                         self.solver.config.df_path_foil,
                                                                         self.solver.config.attrs_variable_names)
 
-            sub_op_list = get_virtual_op_list(individual.org_df,
+            sub_op_list = get_virtual_op_list(self.solver.org_map_df,
                                               individual.weight_df,
                                               self.solver.config.attrs_variable_names)
 

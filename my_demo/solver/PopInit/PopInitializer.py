@@ -5,16 +5,10 @@
 @time   :    2025/5/23 16:50
 @project:    CRC25
 """
-from geopandas import GeoDataFrame
-from networkx.classes import DiGraph
 
-from my_demo.solver.Individual import Individual
-from my_demo.solver.PopInit.InitFromRandom import InitFromRandom
-from router import Router
-from typing import List, Tuple
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
-import random
 import math
+
+from my_demo.solver.PopInit.InitFromRandom import InitFromRandom
 
 
 class PopInitializer:

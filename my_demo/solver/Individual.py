@@ -6,13 +6,12 @@
 @project:    CRC25
 """
 
+from copy import deepcopy
+
 from geopandas import GeoDataFrame
-from jupyter_server.auth import User
 from networkx.classes import MultiDiGraph
 
-from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
-from copy import deepcopy
+from utils.dataparser import create_network_graph, handle_weight_with_recovery
 
 
 class Individual:
@@ -43,3 +42,9 @@ class Individual:
         weight_df = deepcopy(self.org_df)
         self.weight_df = handle_weight_with_recovery(weight_df, self.user_model)
         _, self.network = create_network_graph(self.weight_df)
+
+    def __str__(self):
+        return f"obj:{self.obj},gE:{self.graph_error},rE:{self.route_error}"
+
+    def __repr__(self):
+        return self.__str__()

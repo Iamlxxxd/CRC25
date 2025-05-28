@@ -5,13 +5,7 @@
 @time   :    2025/5/22 17:00
 @project:    CRC25
 """
-from geopandas import GeoDataFrame
-from networkx.classes import DiGraph
 
-from my_demo.solver.Individual import Individual
-from router import Router
-from typing import List, Tuple
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 import numpy as np
 class CrossOperator:
 

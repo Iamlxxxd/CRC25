@@ -5,16 +5,10 @@
 @time   :    2025/5/23 17:09
 @project:    CRC25
 """
-from geopandas import GeoDataFrame
-from networkx.classes import DiGraph
 
-from my_demo.solver.FitMeasurer import CALC_INF
-from my_demo.solver.Individual import Individual
-from router import Router
-from typing import List, Tuple
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
-import random
 import numpy as np
+
+from my_demo.solver.Individual import Individual
 from utils.graph_op import graphOperator
 
 
@@ -70,7 +64,7 @@ class InitFromRandom:
             # individual.create_network_graph()
 
             cost = self.solver.fit_measurer.do_measure(individual)
-            if cost >= CALC_INF:
+            if cost >= self.solver.CALC_INF:
                 continue
             else:
                 return individual
