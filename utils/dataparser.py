@@ -46,7 +46,7 @@ def handle_weight_with_recovery(df, user_model):
     df.loc[df['obstacle_free_width_float'] >= user_model["min_sidewalk_width"], 'include'] = 1
 
 
-# Don't include crossings with curbs that are too high
+    # Don't include crossings with curbs that are too high
     df.loc[df['curb_height_max'] > user_model["max_curb_height"], 'include'] = 0
 
       # Don't include paths that are too narrow

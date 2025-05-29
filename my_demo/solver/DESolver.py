@@ -7,9 +7,11 @@
 """
 from copy import deepcopy
 from typing import List
-from tqdm import tqdm
+
+import numpy as np
 from geopandas import GeoDataFrame
 from networkx.classes import DiGraph
+from tqdm import tqdm
 
 from my_demo.config import Config
 from my_demo.solver.CrossOperator import CrossOperator
@@ -20,10 +22,6 @@ from my_demo.solver.PopInit.PopInitializer import PopInitializer
 from my_demo.solver.SelectOperator import SelectOperator
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight
-import numpy as np
-
-from my_demo.solver.Individual import Individual
-from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
 
 class DESolver:
@@ -32,6 +30,9 @@ class DESolver:
 
     origin_node: tuple
     dest_node: tuple
+
+    df_path_foil: GeoDataFrame
+    df_path_fact: GeoDataFrame
 
     meta_map: dict
     heuristic_f = 'my_weight'
@@ -92,8 +93,12 @@ class DESolver:
         df_copy = handle_weight(df_copy, self.config.user_model)
         _, self.org_graph = create_network_graph(df_copy)
 
-        self.origin_node, self.dest_node, _, _, _ = self.router.set_o_d_coords(self.org_graph,
-                                                                               self.config.gdf_coords_loaded)
+        self.origin_node, self.dest_node, self.origin_node_loc, self.dest_node_loc, _ = self.router.set_o_d_coords(
+            self.org_graph,
+            self.config.gdf_coords_loaded)
+        self.path_fact, self.G_path_fact, self.df_path_fact = self.router.get_route(self.org_graph, self.origin_node,
+                                                                                    self.dest_node, self.heuristic_f)
+        self.df_path_foil = self.config.df_path_foil
 
     def run(self, max_iter=None):
         self.initializer.heuristic_init_pop()

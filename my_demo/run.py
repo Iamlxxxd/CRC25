@@ -1,12 +1,16 @@
 import os
-import yaml
-from my_demo.config import Config
-import sys
-import os
 import random
+import sys
+
 import numpy as np
+import yaml
+from pyinstrument import Profiler
+from my_demo.config import Config
+
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
+from visual import visual_line, visual_map
+
 
 def set_seed(seed=7):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -15,9 +19,9 @@ def set_seed(seed=7):
 
     np.random.seed(seed)
 
+
 def main():
     set_seed()
-
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(current_dir, "config.yaml")
@@ -50,9 +54,15 @@ def main():
 
     solver = DESolver(config)
     solver.run()
-    #todo solution
+    visual_line(solver)
+    visual_map(solver)
+    # todo solution
     print("DONE")
 
-if __name__ == "__main__":
-    main()
 
+if __name__ == "__main__":
+    profiler = Profiler()
+    profiler.start()
+    main()
+    profiler.stop()
+    print(profiler.output_text(unicode=True, color=True))

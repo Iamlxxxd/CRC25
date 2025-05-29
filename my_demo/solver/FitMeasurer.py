@@ -12,9 +12,6 @@ import numpy as np
 from my_demo.solver.Individual import Individual
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
-# 极大值
-CALC_INF = int(np.finfo(np.float64).max / 2)
-
 
 class FitMeasurer:
 
@@ -24,7 +21,7 @@ class FitMeasurer:
     def do_measure(self, individual: Individual) -> float:
         null_solution_flag = self.calc_gen_obj(individual)
         if not null_solution_flag:
-            return CALC_INF
+            return self.solver.CALC_INF
         cost = self.obj_to_cost(individual)
         return cost
 
@@ -43,6 +40,7 @@ class FitMeasurer:
                                               individual.weight_df,
                                               self.solver.config.attrs_variable_names)
 
+            individual.path_df = path_df
             individual.route_error = route_error
             individual.graph_error = len([op for op in sub_op_list if op[3] == "success"])
             return True

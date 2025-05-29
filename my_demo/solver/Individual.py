@@ -30,6 +30,7 @@ class Individual:
 
     obj: float
 
+    path_df: GeoDataFrame
     def __init__(self, org_geo_df: GeoDataFrame, user_model: dict):
         self.org_df = org_geo_df
         self.user_model = user_model

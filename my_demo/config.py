@@ -1,7 +1,8 @@
-import os
 import json
-import pandas as pd
+import os
+
 import geopandas as gpd
+import pandas as pd
 from geopandas import GeoDataFrame
 from shapely import wkt
 
