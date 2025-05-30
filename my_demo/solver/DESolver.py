@@ -7,6 +7,7 @@
 """
 from copy import deepcopy
 from typing import List
+import multiprocessing
 
 import numpy as np
 from geopandas import GeoDataFrame
@@ -22,6 +23,7 @@ from my_demo.solver.PopInit.PopInitializer import PopInitializer
 from my_demo.solver.SelectOperator import SelectOperator
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight
+from utils.common_utils import set_seed
 
 
 class DESolver:
@@ -38,13 +40,8 @@ class DESolver:
     heuristic_f = 'my_weight'
     heuristic = "dijkstra"
 
-    pop_size = 50
     # 极大值
     CALC_INF = int(np.finfo(np.float64).max / 2)
-
-    pop: List[Individual] = [None] * pop_size
-    mut_pop: List[Individual] = [None] * pop_size
-    cross_pop: List[Individual] = [None] * pop_size
 
     best_individual: Individual = None
     each_iter_best_individual: List[Individual] = []
@@ -85,7 +82,7 @@ class DESolver:
         self.cross_operator = CrossOperator(self)
         self.select_operator = SelectOperator(self)
 
-        self.no_improve_count = 0  # 新增：记录best_individual未更新次数
+        self.no_improve_count = 0
 
     def load_basic_data(self):
         self.org_map_df = self.config.basic_network
@@ -99,6 +96,12 @@ class DESolver:
         self.path_fact, self.G_path_fact, self.df_path_fact = self.router.get_route(self.org_graph, self.origin_node,
                                                                                     self.dest_node, self.heuristic_f)
         self.df_path_foil = self.config.df_path_foil
+
+        # 为什么放到这里？ multiprocessing fork的时候 如果不在init初始化 会fork一份内容为空的
+        self.pop_size = 50
+        self.pop: List[Individual] = [None] * self.pop_size
+        self.mut_pop: List[Individual] = [None] * self.pop_size
+        self.cross_pop: List[Individual] = [None] * self.pop_size
 
     def run(self, max_iter=None):
         self.initializer.heuristic_init_pop()
@@ -114,6 +117,7 @@ class DESolver:
             self.pop = sorted(self.pop, key=lambda x: x.obj)
 
             current_best = self.pop[0]
+            flag = "="
             if self.best_individual is None \
                     or current_best.obj < self.best_individual.obj:
 
@@ -121,11 +125,12 @@ class DESolver:
                 self.best_individual = best_cp
                 self.each_iter_best_individual.append(best_cp)
                 self.no_improve_count = 0
+                flag = "↑"
             else:
                 self.each_iter_best_individual.append(self.best_individual)
                 self.no_improve_count += 1
 
-            pbar.set_postfix({'obj': str(self.best_individual)})
+            pbar.set_postfix({'obj': str(self.best_individual), "update": flag, "stay_count": self.no_improve_count})
             if self.termination_trigger(i):
                 break
 

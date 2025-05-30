@@ -9,7 +9,7 @@ paths:
 params:
   heuristic: dijkstra
   heuristic_f: my_weight
-  jobs: 1
+  multi_job: True
   n_perturbation: 50
   operator_p: [0.15, 0.15, 0.15, 0.15, 0.4]
   gen_num: 10000

@@ -10,14 +10,8 @@ from my_demo.config import Config
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
 from visual import visual_line, visual_map
+from  utils.common_utils import set_seed
 
-
-def set_seed(seed=7):
-    os.environ['PYTHONHASHSEED'] = str(seed)
-
-    random.seed(seed)
-
-    np.random.seed(seed)
 
 
 def main():
@@ -44,7 +38,7 @@ def main():
         'gdf_coords_path': config.gdf_coords_path,
         'heuristic': config.heuristic,
         'heuristic_f': config.heuristic_f,
-        'jobs': config.jobs,
+        'jobs': 10,
         'attrs_variable_names': config.attrs_variable_names,
         "n_perturbation": config.n_perturbation,
         "operator_p": config.operator_p,
@@ -65,4 +59,5 @@ if __name__ == "__main__":
     profiler.start()
     main()
     profiler.stop()
-    print(profiler.output_text(unicode=True, color=True))
+    print(profiler.output_text(unicode=True, color=True,show_all=True))
+    profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)

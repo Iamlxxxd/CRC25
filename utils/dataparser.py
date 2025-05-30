@@ -1,6 +1,10 @@
 
 # Third-party library imports
 import numpy as np
+import warnings
+from numba.core.errors import NumbaDeprecationWarning
+
+warnings.filterwarnings("ignore", category=NumbaDeprecationWarning)
 import pandas as pd
 import shapely.ops as so
 import shapely.geometry as sg

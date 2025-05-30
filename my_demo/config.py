@@ -77,8 +77,8 @@ class Config:
         self.heuristic = self.config['params']['heuristic']
         # 路径权重字段
         self.heuristic_f = self.config['params']['heuristic_f']
-        # 并行进程数
-        self.jobs = self.config['params']['jobs']
+        # 是否并行
+        self.multi_job = self.config['params']['multi_job']
         # 迭代代数
         self.gen_num = self.config['params']['gen_num']
         # 拉格朗日惩罚系数
