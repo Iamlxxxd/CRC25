@@ -57,7 +57,7 @@ class LS():
         self.origin_node, self.dest_node, self.origin_node_loc, self.dest_node_loc, self.gdf_coords = self.router_h.set_o_d_coords(self.G, self.gdf_coords_loaded)
 
         self.path_fact, self.G_path_fact, self.df_path_fact = self.router_h.get_route(self.G, self.origin_node, self.dest_node, self.heuristic_f)
-    
+        pass
     def generate_neighbor(self, df):
         (df_perturbed_i, G_perturbed_i),(df_path_i, G_path_i), op_list_perturbed = generate_neighbor_p(df, self.router_h, self.graph_operator, self.origin_node, self.dest_node, self.args, self.user_model)
         if df_perturbed_i is None:
