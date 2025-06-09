@@ -59,7 +59,7 @@ class ModelSolver:
         self.org_map_df_process()
 
     def org_map_df_process(self):
-        self.handle_weight_without_perfrence(self.org_map_df)
+        self.handle_weight_without_preference(self.org_map_df)
         self.org_map_df['start_point'] = self.org_map_df['geometry'].apply(lambda x: x.coords[0])
         self.org_map_df['end_point'] = self.org_map_df['geometry'].apply(lambda x: x.coords[-1])
 
@@ -85,12 +85,13 @@ class ModelSolver:
 
         pass
 
-    def handle_weight_without_perfrence(self, df: GeoDataFrame):
+    def handle_weight_without_preference(self, df: GeoDataFrame):
         user_model = self.config.user_model
         # Don't include crossings with curbs that are too high
         df.loc[df['curb_height_max'] > user_model["max_curb_height"], 'include'] = 0
 
-        # Don't include paths that are too narrow
+        # Don't include paths that are too n
+        # arrow
         df.loc[df['obstacle_free_width_float'] < user_model["min_sidewalk_width"], 'include'] = 0
 
         # Define weight (combination of objectives)
@@ -126,9 +127,9 @@ class ModelSolver:
             model.addConstr(y[arc] <= x_neg[arc], name="arc_f_neg_{}".format(arc))
 
         # Linearization Constraints
-        model.addConstr((w[arc] <= y[arc] for arc in self.data_holder.all_edges), name="w_y_")
-        model.addConstr((w[arc] <= x_p[arc] for arc in self.data_holder.all_edges), name="w_xP_")
-        model.addConstr((w[arc] >= y[arc] + x_p[arc] - 1 for arc in self.data_holder.all_edges), name="w_y_xP_")
+        model.addConstrs((w[arc] <= y[arc] for arc in self.data_holder.all_edges), name="w_y_")
+        model.addConstrs((w[arc] <= x_p[arc] for arc in self.data_holder.all_edges), name="w_xP_")
+        model.addConstrs((w[arc] >= y[arc] + x_p[arc] - 1 for arc in self.data_holder.all_edges), name="w_y_xP_")
 
         #todo foil path
 

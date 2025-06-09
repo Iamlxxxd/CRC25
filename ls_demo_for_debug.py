@@ -93,43 +93,53 @@ class LS():
 
 
 def read_data(args):
-
+    # 新的读取逻辑
     basic_network_path = args['basic_network_path']
     foil_json_path = args['foil_json_path']
     df_path_foil_path = args['df_path_foil_path']
     gdf_coords_path = args['gdf_coords_path']
+    map_path = args['map_path']
 
+    # 读取主网络
     df = gpd.read_file(basic_network_path)
+    # 读取foil路径
     with open(foil_json_path, 'r') as f:
         path_foil = json.load(f)
-
+    # 读取foil路径的geodataframe
     df_path_foil = gpd.read_file(df_path_foil_path)
+    # 读取起终点
     gdf_coords_loaded = pd.read_csv(gdf_coords_path, sep=';')
-
     gdf_coords_loaded['geometry'] = gdf_coords_loaded['geometry'].apply(wkt.loads)
     gdf_coords_loaded = gpd.GeoDataFrame(gdf_coords_loaded, geometry='geometry')
+    # 读取地图（如有需要，可在此处加载地图文件）
+    # map_gdf = gpd.read_file(map_path) # 如后续需要用到地图文件，可解开此行
 
     return df, path_foil, df_path_foil, gdf_coords_loaded
-#%%
-route_name =  "demo_walk"
-route_id = "3"
-basic_network_path = f'./examples/{route_name}/network_demo_walk_{route_id}'
-foil_json_path = f'./examples/{route_name}/route_nodes_demo_walk_{route_id}.json'
-df_path_foil_path = f'./examples/{route_name}/route_demo_walk_{route_id}'
-gdf_coords_path = f'./examples/{route_name}/route_demo_walk_{route_id}_start_end.csv'
-meta_data_path = f'./examples/{route_name}/metadata_{route_name}_{route_id}.json'
 
+#%%
+# 新的路径设置
+route_name = "osdpm_1_1"  # 例如 routes/demo_walk
+
+# 读取metadata.json
+meta_data_path = f'./data/train/routes/{route_name}/metadata.json'
 with open(meta_data_path, 'r') as f:
     meta_data = json.load(f)
+
+# 地图文件名从metadata.json获取
+map_filename = meta_data["map"]["map_name"]
+map_path = f'./data/train/maps/{map_filename}'
+
+# 其它数据文件路径
+basic_network_path = map_path
+foil_json_path = f'./data/train/routes/{route_name}/foil_route.json'
+df_path_foil_path = f'./data/train/routes/{route_name}/foil_route.gpkg'
+gdf_coords_path = f'./data/train/routes/{route_name}/route_start_end.csv'
 
 # Profile settings
 user_model = meta_data["user_model"]
 meta_map = meta_data["map"]
-
 attrs_variable_names = user_model["attrs_variable_names"]
 route_error_delta = user_model["route_error_threshold"]
-# Demo route
-
 
 #perturbation
 n_perturbation = 50
@@ -147,7 +157,8 @@ args = {
     "n_perturbation": n_perturbation,
     "operator_p": operator_p,
     "user_model": user_model,
-    "meta_map": meta_map
+    "meta_map": meta_map,
+    "map_path": map_path
 }
 
 
@@ -233,73 +244,90 @@ axs[1].grid(True)
 plt.tight_layout()
 plt.show()
 #%%
-gdf_coords = ls.gdf_coords.copy()
-origin_node_loc_length = ls.origin_node_loc
-dest_node_loc_length = ls.dest_node_loc
+import copy
+
+# Helper function to ensure CRS is set
+def ensure_crs(gdf, crs):
+    if gdf.crs is None:
+        gdf = gdf.set_crs(crs)
+    elif gdf.crs != crs:
+        gdf = gdf.set_crs(crs, allow_override=True)
+    return gdf.to_crs(crs)
+
+# Ensure all GeoDataFrames have CRS set before transforming
+gdf_coords = ensure_crs(copy.deepcopy(ls.gdf_coords), meta_map["CRS"])
+origin_node_loc_length = copy.deepcopy(ls.origin_node_loc)
+dest_node_loc_length = copy.deepcopy(ls.dest_node_loc)
+df_path_fact_copy = ensure_crs(copy.deepcopy(ls.df_path_fact), meta_map["CRS"])
+df_path_foil_copy = ensure_crs(copy.deepcopy(ls.df_path_foil), meta_map["CRS"])
+best_route_copy = ensure_crs(copy.deepcopy(best_route[0]), meta_map["CRS"])
+df_main_copy = ensure_crs(copy.deepcopy(ls.df), meta_map["CRS"])
 
 # Subset network for plotting
-my_rad = 70
+my_rad = 7000
 gdf_coords['buffer'] = gdf_coords['geometry'].buffer(my_rad, cap_style=3)
 plot_area = gpd.GeoDataFrame(geometry=[gdf_coords['buffer'][0].union(gdf_coords['buffer'][1])], crs=meta_map["CRS"])
-df_sub = gpd.sjoin(ls.df, plot_area, how='inner').reset_index()
+df_sub = gpd.sjoin(df_main_copy, plot_area, how='inner').reset_index()
 
+# 属性图层颜色样式
+attrs_color = {
+    "path_type": {"c": "yellow", "ls": "-", "lw": 5},
+    "curb_height_max": {"c": "green", "ls": "-", "lw": 4},
+    "obstacle_free_width_float": {"c": "orange", "ls": "-", "lw": 3}
+}
 
-attrs_color = {"path_type": {"c":"yellow","ls": "-", "lw": 5}, 
-               "curb_height_max": {"c":"green","ls": "-", "lw": 4}, 
-               "obstacle_free_width_float": {"c":"orange","ls": "-", "lw": 3}}
-fig, ax = plt.subplots(figsize=(12,12))
+# 绘图
+fig, ax = plt.subplots(figsize=(12, 12))
 
-# Network
+# 主路网背景
 df_sub.plot(ax=ax, color='lightgrey', linewidth=1)
 
-ls.df_path_fact.plot(ax=ax, color='grey', linewidth=4)
-ls.df_path_foil.plot(ax=ax, color='black', linewidth=4)
-best_route[0].plot(ax=ax, color='green', linewidth=2)
+# 路径线
+df_path_fact_copy.plot(ax=ax, color='grey', linewidth=4, label='fact_route')
+df_path_foil_copy.plot(ax=ax, color='black', linewidth=4, label='foil_route')
+best_route_copy.plot(ax=ax, color='green', linewidth=2, label='best_route (perturbed)')
 
-# not_common_edges_df.plot(ax=ax, color='yellow', linewidth=2)
-# Origin and destination location
-gdf_coords.head(1).plot(ax=ax, color='blue', markersize=50)
-gdf_coords.tail(1).plot(ax=ax, color='red', markersize=50)
+# 起点终点坐标
+gdf_coords.head(1).plot(ax=ax, color='blue', markersize=50, label='Origin')
+gdf_coords.tail(1).plot(ax=ax, color='red', markersize=50, label='Destination')
 
-# Origin and destination nodes
+# 起点终点节点（GeoSeries）
 gpd.GeoSeries([origin_node_loc_length], crs=meta_map["CRS"]).plot(ax=ax, color='blue', markersize=20)
 gpd.GeoSeries([dest_node_loc_length], crs=meta_map["CRS"]).plot(ax=ax, color='red', markersize=20)
 
-# Background
+# 添加底图
 cx.add_basemap(ax=ax, source=cx.providers.CartoDB.Voyager, crs=meta_map["CRS"])
 
-# Legend
-route_acc = mpatches.Patch(color='black', label='foil_route')
-route = mpatches.Patch(color='grey', label='fact_route')
-route_best = mpatches.Patch(color='green', label='best_route (perturbed)')
-origin = mpatches.Patch(color='blue', label= 'Orgin')
-dest = mpatches.Patch(color='red', label= 'destination')
-legend_handles = [route_acc,route,route_best,origin,dest]
-for attr, color in attrs_color.items():
-    legend_handles.append(mpatches.Patch(color=color["c"], label=attr))
+# 图例
+legend_handles = [
+    mpatches.Patch(color='black', label='foil_route'),
+    mpatches.Patch(color='grey', label='fact_route'),
+    mpatches.Patch(color='green', label='best_route (perturbed)'),
+    mpatches.Patch(color='blue', label='Origin'),
+    mpatches.Patch(color='red', label='Destination')
+]
+for attr, style in attrs_color.items():
+    legend_handles.append(mpatches.Patch(color=style["c"], label=attr))
 
-
-plt.legend(handles=legend_handles,loc="lower right")
-
+plt.legend(handles=legend_handles, loc="lower right")
 plt.axis('off')
-
+plt.tight_layout()
 plt.show()
 #%% md
 # # Store results
 #%%
-from utils.dataparser import store_op_list, load_op_list
-from utils.graph_op import pertub_with_op_list
-from utils.dataparser import convert
-from shapely import to_wkt
-
-v_op_list = get_virtual_op_list(ls.df, best_df[0], args["attrs_variable_names"])
-available_op = [(op[0], (convert(op[1][0]), to_wkt(op[1][1], rounding_precision=-1, trim=False)), convert(op[2]), op[3]) for op in v_op_list if op[3] == "success"]
-#test store and load op list
-store_path = "./examples/demo_walk/outputs/"
-store_op_path = f'{store_path}op_list_{route_name}_{route_id}.json'
-with open(store_op_path, 'w') as f:
-    json.dump(available_op, f)
-
-best_route[0].to_file(f'{store_path}p_route_{route_name}_{route_id}', driver='GPKG')
-best_df[0].to_file(f'{store_path}p_network_{route_name}_{route_id}', driver='GPKG')
-
+# from utils.dataparser import store_op_list, load_op_list
+# from utils.graph_op import pertub_with_op_list
+# from utils.dataparser import convert
+# from shapely import to_wkt
+#
+# v_op_list = get_virtual_op_list(ls.df, best_df[0], args["attrs_variable_names"])
+# available_op = [(op[0], (convert(op[1][0]), to_wkt(op[1][1], rounding_precision=-1, trim=False)), convert(op[2]), op[3]) for op in v_op_list if op[3] == "success"]
+# #test store and load op list
+# store_path = "./examples/demo_walk/outputs/"
+# store_op_path = f'{store_path}op_list_{route_name}_{route_id}.json'
+# with open(store_op_path, 'w') as f:
+#     json.dump(available_op, f)
+#
+# best_route[0].to_file(f'{store_path}p_route_{route_name}_{route_id}', driver='GPKG')
+# best_df[0].to_file(f'{store_path}p_network_{route_name}_{route_id}', driver='GPKG')
