@@ -5,6 +5,7 @@
 @time   :    2025/5/29 10:46
 @project:    CRC25
 """
+import os.path
 
 import contextily as cx
 import geopandas as gpd
@@ -12,13 +13,10 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
 
-def visual_line(solver):
-
-    each_iter_best_individual = solver.each_iter_best_individual
-
-    objs = [ind.obj for ind in each_iter_best_individual]
-    graph_errors = [ind.graph_error for ind in each_iter_best_individual]
-    route_errors = [ind.route_error for ind in each_iter_best_individual]
+def visual_line(visual_dict: dict):
+    objs = visual_dict.get("objs")
+    graph_errors = visual_dict.get("graph_errors")
+    route_errors = visual_dict.get("route_errors")
 
     fig, axs = plt.subplots(3, 1, figsize=(10, 8))
 
@@ -41,24 +39,24 @@ def visual_line(solver):
         ax.grid(True)
 
     plt.tight_layout()
-    #todo save
+    # todo save
     plt.show()
 
 
-def visual_map(solver):
-    gdf_coords = solver.config.gdf_coords_loaded
-    origin_node_loc_length = solver.origin_node_loc
-    dest_node_loc_length = solver.dest_node_loc
-    meta_map = solver.meta_map
-    df_path_fact = solver.df_path_fact
-    df_path_foil = solver.df_path_foil
-    best_route = solver.best_individual.path_df
+def visual_map(visual_dict: dict):
+    gdf_coords = visual_dict.get("gdf_coords")
+    origin_node_loc_length = visual_dict.get("origin_node_loc_length")
+    dest_node_loc_length = visual_dict.get("dest_node_loc_length")
+    meta_map = visual_dict.get("meta_map")
+    df_path_fact = visual_dict.get("df_path_fact")
+    df_path_foil = visual_dict.get("df_path_foil")
+    best_route = visual_dict.get("best_route")
 
     # Subset network for plotting
     my_rad = 70
     gdf_coords['buffer'] = gdf_coords['geometry'].buffer(my_rad, cap_style=3)
     plot_area = gpd.GeoDataFrame(geometry=[gdf_coords['buffer'][0].union(gdf_coords['buffer'][1])], crs=meta_map["CRS"])
-    df_sub = gpd.sjoin(solver.org_map_df, plot_area, how='inner').reset_index()
+    df_sub = gpd.sjoin(visual_dict.get("org_map_df"), plot_area, how='inner').reset_index()
 
     attrs_color = {"path_type": {"c": "yellow", "ls": "-", "lw": 5},
                    "curb_height_max": {"c": "green", "ls": "-", "lw": 4},
@@ -68,8 +66,8 @@ def visual_map(solver):
     # Network
     df_sub.plot(ax=ax, color='lightgrey', linewidth=1)
 
-    df_path_fact.plot(ax=ax, color='grey', linewidth=4)
-    df_path_foil.plot(ax=ax, color='black', linewidth=4)
+    df_path_fact.plot(ax=ax, color='grey', linewidth=7)
+    df_path_foil.plot(ax=ax, color='black', linewidth=7)
     best_route.plot(ax=ax, color='green', linewidth=2)
 
     # not_common_edges_df.plot(ax=ax, color='yellow', linewidth=2)
@@ -97,5 +95,53 @@ def visual_map(solver):
     plt.legend(handles=legend_handles, loc="lower right")
 
     plt.axis('off')
-    #todo save
+    # todo save
     plt.show()
+
+
+def visual_map_explore(visual_dict: dict,file_path):
+    import geopandas as gpd
+    meta_map = visual_dict.get("meta_map")
+    gdf_coords = visual_dict.get("gdf_coords")
+    origin_node = visual_dict.get("origin_node_loc_length")
+    dest_node = visual_dict.get("dest_node_loc_length")
+    df_path_fact = visual_dict.get("df_path_fact")
+    df_path_foil = visual_dict.get("df_path_foil")
+    best_route = visual_dict.get("best_route")
+    org_map_df = visual_dict.get("org_map_df")
+    config = visual_dict.get("config")
+
+    # 只画主网络
+    m = org_map_df.explore(
+        color="lightgrey",
+        tiles="CartoDB Voyager",
+        style_kwds=dict(weight=1),
+        legend=False
+    )
+
+    if df_path_fact is not None and not df_path_fact.empty and df_path_fact.geometry.notnull().any():
+        df_path_fact = df_path_fact.set_crs(meta_map['CRS'])
+        df_path_fact = df_path_fact.to_crs(org_map_df.crs)
+        m = df_path_fact.explore(m=m, color="grey", style_kwds=dict(weight=7), name="fact_route", legend=False)
+
+
+    if df_path_foil is not None and not df_path_foil.empty and df_path_foil.geometry.notnull().any():
+        m = df_path_foil.explore(m=m, color="black", style_kwds=dict(weight=7), name="foil_route", legend=False)
+    if best_route is not None and not best_route.empty and best_route.geometry.notnull().any():
+        m = best_route.explore(m=m, color="green", style_kwds=dict(weight=2), name="best_route", legend=False)
+
+    # 起点终点
+    if gdf_coords is not None and not gdf_coords.empty:
+        m = gdf_coords.head(1).explore(m=m, color="blue", marker_kwds=dict(radius=8), name="Origin", legend=False)
+        m = gdf_coords.tail(1).explore(m=m, color="red", marker_kwds=dict(radius=8), name="Destination", legend=False)
+
+    # 起点终点节点
+    if origin_node is not None:
+        m = gpd.GeoSeries([origin_node], crs=org_map_df.crs).explore(m=m, color="blue", marker_kwds=dict(radius=5),
+                                                                 name="Origin Node", legend=False)
+    if dest_node is not None:
+        m = gpd.GeoSeries([dest_node], crs=org_map_df.crs).explore(m=m, color="red", marker_kwds=dict(radius=5),
+                                                               name="Dest Node", legend=False)
+
+    m.save(os.path.join(file_path,"map_f.html"))
+    return m

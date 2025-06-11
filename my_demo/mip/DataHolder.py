@@ -19,6 +19,9 @@ class DataHolder:
     all_feasible_both_way = defaultdict(list)
     all_infeasible_both_way = defaultdict(list)
 
+    all_feasible_dir_arcs = defaultdict(list)
+    all_infeasible_dir_arcs = defaultdict(list)
+
     M:float
 
     def __init__(self):

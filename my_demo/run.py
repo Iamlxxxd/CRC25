@@ -53,8 +53,8 @@ def main():
 
     solver = DESolver(config)
     solver.run()
-    visual_line(solver)
-    visual_map(solver)
+    visual_line(solver.process_visual_iter_data())
+    visual_map(solver.process_visual_data())
     # todo solution
     print("DONE")
 

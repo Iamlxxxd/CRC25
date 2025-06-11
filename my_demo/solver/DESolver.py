@@ -139,3 +139,24 @@ class DESolver:
             return True
 
         return False
+
+    def process_visual_data(self) -> dict:
+
+        return {"gdf_coords":self.config.gdf_coords_loaded,
+                "origin_node_loc_length":self.origin_node_loc,
+                "dest_node_loc_length":self.dest_node_loc,
+                "meta_map":self.meta_map,
+                "df_path_fact":self.df_path_fact,
+                "df_path_foil":self.df_path_foil,
+                "best_route":self.best_individual.path_df,
+                "org_map_df":self.org_map_df}
+
+    def process_visual_iter_data(self)-> dict:
+        each_iter_best_individual = solver.each_iter_best_individual
+
+        objs = [ind.obj for ind in each_iter_best_individual]
+        graph_errors = [ind.graph_error for ind in each_iter_best_individual]
+        route_errors = [ind.route_error for ind in each_iter_best_individual]
+        return {"objs":objs,
+                "graph_errors":graph_errors,
+                "route_errors":route_errors}

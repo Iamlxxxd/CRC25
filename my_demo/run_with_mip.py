@@ -17,7 +17,9 @@ from my_demo.mip.MipModelSolver import ModelSolver
 
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
-from visual import visual_line, visual_map
+from visual import visual_line, visual_map, visual_map_explore
+
+
 # from  utils.common_utils import set_seed
 
 def set_seed(seed=7):
@@ -27,6 +29,7 @@ def set_seed(seed=7):
 
     np.random.seed(seed)
 
+
 def main():
     set_seed()
 
@@ -35,8 +38,6 @@ def main():
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
 
-    # 自动查找examples目录作为基础路径
-    # 假设config.yaml和my_demo在同级，examples与其同级
     base_dir = os.path.join(current_dir, "..")
     base_dir = os.path.abspath(base_dir)
 
@@ -45,8 +46,10 @@ def main():
 
     solver = ModelSolver(config)
     solver.init_model()
-    # visual_line(solver)
-    # visual_map(solver)
+    solver.solve_model()
+    solver.process_solution_from_model()
+
+    visual_map_explore(solver.process_visual_data(), os.path.join(base_dir, "my_demo", "output", "visual"))
     # todo solution
     print("DONE")
 
