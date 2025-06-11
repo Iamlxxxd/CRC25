@@ -17,7 +17,6 @@ class Router:
         for u, v in zip(node_route[:-1], node_route[1:]):
             # Get all edges between consecutive nodes
             edges = G.get_edge_data(u, v)
-            
             # If multiple edges exist, choose the one with minimal weight
             min_edge = min(edges.values(), 
                         key=lambda x: x.get(heuristic_f, 1))

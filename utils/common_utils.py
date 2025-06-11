@@ -15,3 +15,9 @@ def set_seed(seed=7):
     random.seed(seed)
 
     np.random.seed(seed)
+def ensure_crs(gdf, crs):
+    if gdf.crs is None:
+        gdf = gdf.set_crs(crs)
+    elif gdf.crs != crs:
+        gdf = gdf.set_crs(crs, allow_override=True)
+    return gdf.to_crs(crs)

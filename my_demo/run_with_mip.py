@@ -37,7 +37,7 @@ def main():
 
     # 自动查找examples目录作为基础路径
     # 假设config.yaml和my_demo在同级，examples与其同级
-    base_dir = os.path.join(current_dir, "..", "examples")
+    base_dir = os.path.join(current_dir, "..")
     base_dir = os.path.abspath(base_dir)
 
     # 初始化DataLoader，传入base_dir

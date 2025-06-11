@@ -118,7 +118,7 @@ def read_data(args):
 
 #%%
 # 新的路径设置
-route_name = "osdpm_1_1"  # 例如 routes/demo_walk
+route_name = "osdpm_4_5"  # 例如 routes/demo_walk
 
 # 读取metadata.json
 meta_data_path = f'./data/train/routes/{route_name}/metadata.json'

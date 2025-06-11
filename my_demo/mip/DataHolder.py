@@ -5,12 +5,21 @@
 @time   :    2025/6/6 14:37
 @project:    CRC25
 """
+from collections import defaultdict
 class DataHolder:
     all_nodes = []
-    all_edges = []
-    all_feasible_edges = []
-    all_infeasible_edges = []
+    features = ["curb_height_max", "obstacle_free_width_float"]
+    point_id_map = dict()
+    all_arcs = []
+    foil_route_arcs = []
+    row_data = dict()
+
+    all_feasible_arcs = defaultdict(list)
+    all_infeasible_arcs = defaultdict(list)
+    all_feasible_both_way = defaultdict(list)
+    all_infeasible_both_way = defaultdict(list)
+
+    M:float
 
     def __init__(self):
         pass
-
