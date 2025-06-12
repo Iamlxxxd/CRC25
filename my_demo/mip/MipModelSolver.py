@@ -73,7 +73,7 @@ class ModelSolver:
 
     def process_nodes(self):
         all_points = pd.concat([self.org_map_df['geometry'].apply(lambda x: x.coords[0]),
-                                self.org_map_df['geometry'].apply(lambda x: x.coords[-1])]).drop_duplicates().tolist()
+                                self.org_map_df['geometry'].apply(lambda x: x.coords[1])]).drop_duplicates().tolist()
         point_id_map = {pt: idx for idx, pt in enumerate(all_points)}
         self.data_holder.all_nodes = list(point_id_map.values())
         self.data_holder.point_id_map = point_id_map
@@ -123,19 +123,19 @@ class ModelSolver:
                         self.data_holder.all_infeasible_arcs[ez_attr].append((node1, node2))
                         self.data_holder.all_infeasible_dir_arcs[ez_attr].append((node1, node2))
 
-            self.data_holder.row_data[(node1, node2)] = row
+            self.data_holder.row_data[(node1, node2)] = self.org_map_df.loc[row.name].copy()
 
     def process_foil(self):
         get_nodes = lambda x: (self.data_holder.point_id_map.get(x.coords[0]),
                                self.data_holder.point_id_map.get(x.coords[1]))
-        self.config.df_path_foil['arc'] = self.config.df_path_foil['geometry'].apply(get_nodes)
+        self.df_path_foil['arc'] = self.config.df_path_foil['geometry'].apply(get_nodes)
         self.df_path_foil.sort_values(by=['arc'], inplace=True)
 
         foil_cost = 0
-        for idx, row in self.config.df_path_foil.iterrows():
+        for idx, row in self.df_path_foil.iterrows():
             foil_cost += self.data_holder.row_data.get(row['arc'])['c']
         self.data_holder.foil_cost_without_preference = foil_cost
-        self.data_holder.foil_route_arcs = self.config.df_path_foil['arc'].tolist()
+        self.data_holder.foil_route_arcs = self.df_path_foil['arc'].tolist()
 
     def handle_weight_without_preference(self, df: GeoDataFrame):
         user_model = self.config.user_model
@@ -158,25 +158,21 @@ class ModelSolver:
 
         df.loc[df['crossing'] == 'Yes', 'c'] = df['length'] * user_model["crossing_weight_factor"]
 
+        coef_perferred = ((1 - user_model["walk_bike_preference_weight_factor"]) / user_model[
+            "walk_bike_preference_weight_factor"])
+        coef_unperferred = user_model["walk_bike_preference_weight_factor"] - 1
+
         # todo 可能有数值问题 会导致无解?
         if user_model["walk_bike_preference"] == 'walk':
-            df.loc[df['path_type'] == 'walk', 'd'] = (df['c']
-                                                      * user_model["walk_bike_preference_weight_factor"])
+            df.loc[df['path_type'] == 'walk', 'c'] = (df['c'] * user_model["walk_bike_preference_weight_factor"])
 
-            df.loc[df['path_type'] == 'walk', 'd'] = (df['c']
-                                                      * ((1 - user_model["walk_bike_preference_weight_factor"]) /
-                                                         user_model["walk_bike_preference_weight_factor"]))
-            df.loc[df['path_type'] == 'bike', 'd'] = (df['c']
-                                                      * (user_model["walk_bike_preference_weight_factor"] - 1))
+            df.loc[df['path_type'] == 'walk', 'd'] = df['c'] * coef_perferred
+            df.loc[df['path_type'] == 'bike', 'd'] = df['c'] * coef_unperferred
         elif user_model["walk_bike_preference"] == 'bike':
-            df.loc[df['path_type'] == 'bike', 'd'] = (df['c']
-                                                      * user_model["walk_bike_preference_weight_factor"])
+            df.loc[df['path_type'] == 'bike', 'c'] = df['c'] * user_model["walk_bike_preference_weight_factor"]
 
-            df.loc[df['path_type'] == 'bike', 'd'] = (df['c']
-                                                      * ((1 - user_model["walk_bike_preference_weight_factor"]) /
-                                                         user_model["walk_bike_preference_weight_factor"]))
-            df.loc[df['path_type'] == 'walk', 'd'] = (df['c']
-                                                      * (user_model["walk_bike_preference_weight_factor"] - 1))
+            df.loc[df['path_type'] == 'bike', 'd'] = df['c'] * coef_perferred
+            df.loc[df['path_type'] == 'walk', 'd'] = df['c'] * coef_unperferred
 
         # if user_model["walk_bike_preference"] == 'walk':
         #     df.loc[df['path_type'] == 'walk', 'my_weight'] = df['my_weight'] * user_model["walk_bike_preference_weight_factor"]
@@ -192,10 +188,12 @@ class ModelSolver:
         self.model = Model('CRC25')
 
         self.x_pos = self.model.addVars(((k, i, j) for k in self.data_holder.all_feasible_arcs
-                                         for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xPos_")
+                                         for (i, j) in self.data_holder.all_feasible_arcs[k]), vtype=GRB.BINARY,
+                                        name="xPos_")
 
         self.x_neg = self.model.addVars(((k, i, j) for k in self.data_holder.all_infeasible_arcs
-                                         for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xNeg_")
+                                         for (i, j) in self.data_holder.all_infeasible_arcs[k]), vtype=GRB.BINARY,
+                                        name="xNeg_")
 
         self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
         self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
@@ -213,8 +211,17 @@ class ModelSolver:
                 self.model.addConstr(self.y[i, j] <= self.x_neg[f, i, j], name="arc_f_neg_[{},{},{}]".format(f, i, j))
 
         for i, j in self.data_holder.all_arcs:
-            f_neg = quicksum(self.x_neg[k, i, j] for k in self.data_holder.all_infeasible_arcs)
-            f_pos = quicksum((1 - self.x_pos[k, i, j]) for k in self.data_holder.all_feasible_arcs)
+            # 仅在变量存在时才参与 quicksum
+            f_neg = quicksum(
+                self.x_neg[k, i, j]
+                for k in self.data_holder.all_infeasible_arcs
+                if (k, i, j) in self.x_neg
+            )
+            f_pos = quicksum(
+                (1 - self.x_pos[k, i, j])
+                for k in self.data_holder.all_feasible_arcs
+                if (k, i, j) in self.x_pos
+            )
             self.model.addConstr(self.y[i, j] >= f_neg + f_pos - (len(self.eazy_name_map) - 1),
                                  name="arc_f_multiple_[{},{}]".format(i, j))
 
@@ -222,12 +229,14 @@ class ModelSolver:
         for f, arcs in self.data_holder.all_feasible_both_way.items():
             for i, j in arcs:
                 self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
+                # self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
                 self.model.addConstr(self.y[i, j] + self.y[j, i] <= 1, name="ua_y_[{},{}]".format(i, j))
 
         for f, arcs in self.data_holder.all_infeasible_both_way.items():
             for i, j in arcs:
                 self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
+                # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
                 self.model.addConstr(self.y[i, j] + self.y[j, i] <= 1, name="ua_y_[{},{}]".format(i, j))
 
@@ -281,23 +290,36 @@ class ModelSolver:
 
     def modify_org_map_df_by_solution(self):
 
+        modify_dict = defaultdict(list)
         self.graph_error = 0
         for (f, i, j), value in self.x_pos.items():
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
                 self.modify_df_arc_with_attr(attr_name, i, j)
+
+                if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
+                    continue
                 self.graph_error += 1
+                modify_dict[(f, i, j)].append(attr_name)
 
         for (f, i, j), value in self.x_neg.items():
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
                 self.modify_df_arc_with_attr(attr_name, i, j)
+
+                if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
+                    continue
                 self.graph_error += 1
+                modify_dict[(f, i, j)].append(attr_name)
 
         for (i, j), value in self.x_p.items():
             if value.X > 0.99:
                 self.modify_df_arc_with_attr("path_type", i, j)
+
+                if ((i, j) in modify_dict) or ((j, i) in modify_dict):
+                    continue
                 self.graph_error += 1
+                modify_dict[(i, j)].append("path_type")
 
         pass
 
@@ -310,7 +332,9 @@ class ModelSolver:
                 "df_path_fact": self.df_path_fact,
                 "df_path_foil": self.df_path_foil,
                 "best_route": self.df_best_route,
-                "org_map_df": self.org_map_df}
+                "org_map_df": self.org_map_df,
+                "config": self.config,
+                "data_holder": self.data_holder}
 
     def modify_df_arc_with_attr(self, attr_name, i, j):
         row = self.get_row_info_by_arc(i, j)

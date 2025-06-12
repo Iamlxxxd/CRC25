@@ -11,6 +11,7 @@ import contextily as cx
 import geopandas as gpd
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def visual_line(visual_dict: dict):
@@ -101,6 +102,7 @@ def visual_map(visual_dict: dict):
 
 def visual_map_explore(visual_dict: dict,file_path):
     import geopandas as gpd
+    import branca
     meta_map = visual_dict.get("meta_map")
     gdf_coords = visual_dict.get("gdf_coords")
     origin_node = visual_dict.get("origin_node_loc_length")
@@ -143,5 +145,106 @@ def visual_map_explore(visual_dict: dict,file_path):
         m = gpd.GeoSeries([dest_node], crs=org_map_df.crs).explore(m=m, color="red", marker_kwds=dict(radius=5),
                                                                name="Dest Node", legend=False)
 
-    m.save(os.path.join(file_path,"map_f.html"))
+    # 添加自定义图例
+    legend_html = """
+    <div style="position: fixed; 
+                bottom: 50px; left: 50px; width: 180px; height: 170px; 
+                border:2px solid grey; z-index:9999; font-size:14px;
+                background-color:white; opacity: 0.85;
+                ">
+      <b>图例 Legend</b><br>
+      <span style="display:inline-block;width:20px;height:4px;background:grey;margin-right:5px;"></span>fact_route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:black;margin-right:5px;"></span>foil_route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:green;margin-right:5px;"></span>best_route<br>
+      <span style="display:inline-block;width:12px;height:12px;background:blue;border-radius:6px;display:inline-block;margin-right:5px;"></span>Origin<br>
+      <span style="display:inline-block;width:12px;height:12px;background:red;border-radius:6px;display:inline-block;margin-right:5px;"></span>Destination<br>
+    </div>
+    """
+    from folium import Map
+    if hasattr(m, 'get_root'):
+        m.get_root().html.add_child(branca.element.Element(legend_html))
+
+    m.save(os.path.join(file_path, "map_f.html"))
+    return m
+
+
+def visual_map_foil_modded(visual_dict: dict, file_path):
+    import geopandas as gpd
+    import branca
+
+    org_map_df = visual_dict.get("org_map_df")
+    df_path_foil = visual_dict.get("df_path_foil")
+    meta_map = visual_dict.get("meta_map")
+
+    # 只画主网络
+    m = org_map_df.explore(
+        color="lightgrey",
+        tiles="CartoDB Voyager",
+        style_kwds=dict(weight=1),
+        legend=False
+    )
+
+
+    foil_arcs = list(df_path_foil['arc'])
+    arc2idx = {str(arc): idx for idx, arc in enumerate(foil_arcs)}
+    arc2idx.update({str((arc[1], arc[0])): idx for idx, arc in enumerate(foil_arcs)})
+    org_map_df = org_map_df.copy()
+    org_map_df['in_foil'] = org_map_df['arc'].apply(lambda x: str(x) in arc2idx)
+    org_map_df['modded'] = org_map_df['modified'].apply(lambda x: x is not None and len(x) > 0)
+
+    # 画整个路网 没改过的边
+    not_in_foil = org_map_df[~org_map_df['modded']]
+    if not not_in_foil.empty:
+        m = not_in_foil.explore(
+            m=m,
+            color="grey",
+            style_kwds=dict(weight=7),
+            name="not modified",
+            legend=False
+        )
+    # 画fact route
+    df_path_fact = visual_dict.get("df_path_fact")
+    df_path_fact = df_path_fact.set_crs(meta_map['CRS'])
+    df_path_fact = df_path_fact.to_crs(org_map_df.crs)
+    m = df_path_fact.explore(m=m, color="black", style_kwds=dict(weight=7), name="fact route", legend=False)
+
+    # 画所有modded且不在foil_path的边（橘红色，宽度7）
+    modded_not_in_foil = org_map_df[(org_map_df['modded']) & (~org_map_df['in_foil'])]
+    if not modded_not_in_foil.empty:
+        m = modded_not_in_foil.explore(
+            m=m,
+            color="orange",
+            style_kwds=dict(weight=7),
+            name="modified not in foil",
+            legend=False
+        )
+
+    # 只保留路径上的边
+    foil_edges = org_map_df[org_map_df['in_foil']].sort_values(by='arc', key=lambda x: x.map(arc2idx))
+
+    # 生成着色列表
+    color_list = []
+    last_color = None
+    for _, row in foil_edges.iterrows():
+        if row['modded']:
+            # 交替着色
+            color = 'orange' if last_color != 'orange' else 'red'
+            last_color = color
+        else:
+            color = 'black'
+        color_list.append(color)
+    foil_edges = foil_edges.copy()
+    foil_edges['color'] = color_list
+
+    #画foil路径上的边
+    for _, row in foil_edges.iterrows():
+        m = gpd.GeoDataFrame([row], crs=org_map_df.crs).explore(
+            m=m,
+            color=row['color'],
+            style_kwds=dict(weight=7),
+            name="foil route",
+            legend=False
+        )
+
+    m.save(os.path.join(file_path, "map_foil_modded.html"))
     return m

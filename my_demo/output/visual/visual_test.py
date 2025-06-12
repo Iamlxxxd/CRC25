@@ -6,9 +6,11 @@
 @project:    CRC25
 """
 import pickle
-from my_demo.visual import visual_map_explore
+from my_demo.visual import visual_map_explore,visual_map_foil_modded
+import os
 
-with open("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/temp.pkl", 'rb') as f:
-    info =  pickle.load(f)
+base_dir = "/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo"
+with open(f"{base_dir}/output/visual/visual_data.pkl", 'rb') as f:
+    info = pickle.load(f)
 
-visual_map_explore(info)
+visual_map_foil_modded(info, os.path.join(base_dir, "output", "visual"))

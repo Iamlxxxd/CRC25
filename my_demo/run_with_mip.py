@@ -8,6 +8,7 @@
 import os
 import random
 import sys
+import pickle
 
 import numpy as np
 import yaml
@@ -49,8 +50,13 @@ def main():
     solver.solve_model()
     solver.process_solution_from_model()
 
-    visual_map_explore(solver.process_visual_data(), os.path.join(base_dir, "my_demo", "output", "visual"))
-    # todo solution
+    visual_data = solver.process_visual_data()
+    # 保存为pickle
+    visual_pkl_path = os.path.join(base_dir, "my_demo", "output", "visual", "visual_data.pkl")
+    with open(visual_pkl_path, "wb") as f:
+        pickle.dump(visual_data, f)
+
+    visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     print("DONE")
 
 
