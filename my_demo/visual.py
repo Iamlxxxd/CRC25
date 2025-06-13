@@ -176,6 +176,7 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
     org_map_df = visual_dict.get("org_map_df")
     df_path_foil = visual_dict.get("df_path_foil")
     meta_map = visual_dict.get("meta_map")
+    best_route = visual_dict.get("best_route")
 
     # 只画主网络
     m = org_map_df.explore(
@@ -216,6 +217,17 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
             name="fact route",
             legend=False,
             layer_kwds={"show": True, "overlay": True, "control": True, "group": "fact route"}
+        )
+
+    if not best_route.empty:
+        best_route = best_route.set_crs(meta_map['CRS'])
+        best_route = best_route.to_crs(org_map_df.crs)
+        m = best_route.explore(m=m,
+            color="lightblue",
+            style_kwds=dict(weight=7),
+            name="best route",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "best route"}
         )
 
     # 画所有modded且不在foil_path的边（橘红色，宽度7）

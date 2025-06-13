@@ -17,15 +17,9 @@ from tqdm import tqdm
 from collections import defaultdict
 from my_demo.config import Config
 from my_demo.mip.DataHolder import DataHolder
-from my_demo.solver.CrossOperator import CrossOperator
-from my_demo.solver.FitMeasurer import FitMeasurer
-from my_demo.solver.Individual import Individual
-from my_demo.solver.MutOperator import MutOperator
-from my_demo.solver.PopInit.PopInitializer import PopInitializer
-from my_demo.solver.SelectOperator import SelectOperator
 from router import Router
-from utils.dataparser import create_network_graph, handle_weight
-from utils.common_utils import set_seed, ensure_crs
+from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
+from utils.common_utils import set_seed, ensure_crs, correct_arc_direction,get_constraint_string
 from gurobipy import *
 
 
@@ -80,6 +74,9 @@ class ModelSolver:
         self.data_holder.all_nodes = list(point_id_map.values())
         self.data_holder.point_id_map = point_id_map
 
+        self.data_holder.start_node = self.data_holder.point_id_map.get(self.origin_node)
+        self.data_holder.end_node = self.data_holder.point_id_map.get(self.dest_node)
+
     def process_arcs(self):
         self.data_holder.M = self.org_map_df['c'].sum()
         self.org_map_df["arc"] = None  # 用来表示边id
@@ -130,15 +127,23 @@ class ModelSolver:
     def process_foil(self):
         get_nodes = lambda x: (self.data_holder.point_id_map.get(x.coords[0]),
                                self.data_holder.point_id_map.get(x.coords[1]))
-        self.df_path_foil['arc'] = self.config.df_path_foil['geometry'].apply(get_nodes)
-        self.df_path_foil.sort_values(by=['arc'], inplace=True)
+        self.df_path_foil['arc'] = self.df_path_foil['geometry'].apply(get_nodes)
+        self.df_path_foil = correct_arc_direction(self.df_path_foil, self.data_holder.start_node,
+                                                  self.data_holder.end_node)
+        # self.df_path_foil.sort_values(by=['arc'], inplace=True)
 
         foil_cost = 0
         for idx, row in self.df_path_foil.iterrows():
-            foil_cost += self.data_holder.row_data.get(row['arc'])['c']
-        self.data_holder.foil_cost_without_preference = foil_cost
+            foil_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
+        self.data_holder.foil_cost = foil_cost
         self.data_holder.foil_route_arcs = self.df_path_foil['arc'].tolist()
 
+
+        fact_cost = 0
+        self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
+        for idx, row in self.df_path_fact.iterrows():
+            fact_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
+        self.data_holder.fact_cost = fact_cost
     def handle_weight_without_preference(self, df: GeoDataFrame):
         user_model = self.config.user_model
 
@@ -200,7 +205,7 @@ class ModelSolver:
         self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
         self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
         self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, name="w_")
-        big_m = self.data_holder.M*4
+        big_m = self.data_holder.M * 4
 
         # Arc Feasibility Constraints
         for f, arcs in self.data_holder.all_feasible_arcs.items():
@@ -230,17 +235,17 @@ class ModelSolver:
         # Undirected Arc Constraint
         for f, arcs in self.data_holder.all_feasible_both_way.items():
             for i, j in arcs:
-                self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
-                # self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
-                self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                # self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_pos[f, i, j] == self.x_pos[f, j, i], name="ua_pos_[{},{}]".format(i, j))
+                # self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i], name="ua_neg_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_p[i, j] == self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
+                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         for f, arcs in self.data_holder.all_infeasible_both_way.items():
             for i, j in arcs:
-                self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i] , name="ua_neg_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
-                self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                # self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_p[i, j] ==self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
+                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         # Shortest Path Constraints
         for i, j in self.data_holder.all_arcs:
@@ -266,29 +271,27 @@ class ModelSolver:
         #                       for (i, j) in self.data_holder.all_infeasible_arcs[k]))
         # x_p_sum = self.x_p.sum()
         # self.model.setObjective(x_pos_sum + x_neg_sum + x_p_sum, GRB.MINIMIZE)
-        self.model.setObjective(self.x_pos.sum() + self.x_neg.sum() + self.x_p.sum(), GRB.MINIMIZE)
+        self.model.setObjective(self.x_pos.sum() + self.x_neg.sum() + self.x_p.sum() +2000*self.y.sum(), GRB.MINIMIZE)
 
     def solve_model(self, time_limit=3600, gap=0.01):
         self.model.setParam(GRB.Param.MIPGap, gap)
         self.model.setParam(GRB.Param.TimeLimit, time_limit)
         self.model.update()
-        #debug
-        # self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
+        # debug
+        self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
         self.model.optimize()
+
     def process_solution_from_model(self):
         self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
 
     def get_best_route_df_from_solution(self):
-        selected_rows = []
-        for (i, j), value in self.y.items():
-            if value.X > 0.9:
-                row = self.get_row_info_by_arc(i, j)
-                selected_rows.append(row)
+        self.org_map_df = handle_weight_with_recovery(self.org_map_df, self.config.user_model)
 
-        if not selected_rows:
-            return None
-        self.df_best_route = GeoDataFrame(selected_rows, geometry='geometry', crs=self.org_map_df.crs)
+        _, best_graph = create_network_graph(self.org_map_df)
+
+        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
+        _, _, self.df_best_route = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
         self.df_best_route.sort_values(by=['arc'], inplace=True)
 
     def modify_org_map_df_by_solution(self):
@@ -296,31 +299,31 @@ class ModelSolver:
         modify_dict = defaultdict(list)
         self.graph_error = 0
         for (f, i, j), value in self.x_pos.items():
+            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
+                continue
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
                 self.modify_df_arc_with_attr(attr_name, i, j, tag="to_infe")
 
-                if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                    continue
                 self.graph_error += 1
                 modify_dict[(f, i, j)].append(attr_name)
 
         for (f, i, j), value in self.x_neg.items():
+            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
+                    continue
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
                 self.modify_df_arc_with_attr(attr_name, i, j, tag="to_fe")
 
-                if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                    continue
                 self.graph_error += 1
                 modify_dict[(f, i, j)].append(attr_name)
 
         for (i, j), value in self.x_p.items():
+            if ((i, j) in modify_dict) or ((j, i) in modify_dict):
+                continue
             if value.X > 0.99:
                 self.modify_df_arc_with_attr("path_type", i, j, tag="change")
 
-                if ((i, j) in modify_dict) or ((j, i) in modify_dict):
-                    continue
                 self.graph_error += 1
                 modify_dict[(i, j)].append("path_type")
 
@@ -346,12 +349,12 @@ class ModelSolver:
             if tag == "to_fe":
                 # 需要修改高度
                 row[attr_name] = self.config.user_model["max_curb_height"]
-            elif tag=="to_infe":
-                row[attr_name] = self.config.user_model["max_curb_height"]+1
+            elif tag == "to_infe":
+                row[attr_name] = self.config.user_model["max_curb_height"] + 1
         elif attr_name == "obstacle_free_width_float":
             if tag == "to_fe":
                 row[attr_name] = self.config.user_model["min_sidewalk_width"]
-            elif tag=="to_infe":
+            elif tag == "to_infe":
                 row[attr_name] = self.config.user_model["min_sidewalk_width"] - 1
         elif attr_name == "path_type":
             row[attr_name] = ("bike" if row[attr_name] == "walk" else "walk")
@@ -364,7 +367,7 @@ class ModelSolver:
         self.data_holder.row_data.update({(i, j): row})
         self.org_map_df.loc[row.name] = row
 
-    def print_infeasible(self,model):
+    def print_infeasible(self, model):
         model.computeIIS()
         infeasible_list = []
         for cons in model.getConstrs():
