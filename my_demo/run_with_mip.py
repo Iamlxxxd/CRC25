@@ -18,7 +18,7 @@ from my_demo.mip.MipModelSolver import ModelSolver
 
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
-from visual import visual_line, visual_map, visual_map_explore
+from visual import visual_line, visual_map, visual_map_explore,visual_map_foil_modded
 
 
 # from  utils.common_utils import set_seed
@@ -57,6 +57,7 @@ def main():
         pickle.dump(visual_data, f)
 
     visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
+    visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     print("DONE")
 
 

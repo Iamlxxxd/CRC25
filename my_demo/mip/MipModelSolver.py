@@ -64,6 +64,8 @@ class ModelSolver:
         self.org_map_df_process()
 
     def org_map_df_process(self):
+        self.org_map_df['org_obstacle_free_width_float'] = self.org_map_df['obstacle_free_width_float']
+        self.org_map_df['org_curb_height_max'] = self.org_map_df['curb_height_max']
         self.handle_weight_without_preference(self.org_map_df)
 
         self.process_nodes()
@@ -198,7 +200,7 @@ class ModelSolver:
         self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
         self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
         self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, name="w_")
-        big_m = self.data_holder.M
+        big_m = self.data_holder.M*4
 
         # Arc Feasibility Constraints
         for f, arcs in self.data_holder.all_feasible_arcs.items():
@@ -231,14 +233,14 @@ class ModelSolver:
                 self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] + self.y[j, i] <= 1, name="ua_y_[{},{}]".format(i, j))
+                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         for f, arcs in self.data_holder.all_infeasible_both_way.items():
             for i, j in arcs:
                 self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] + self.y[j, i] <= 1, name="ua_y_[{},{}]".format(i, j))
+                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         # Shortest Path Constraints
         for i, j in self.data_holder.all_arcs:
@@ -270,8 +272,9 @@ class ModelSolver:
         self.model.setParam(GRB.Param.MIPGap, gap)
         self.model.setParam(GRB.Param.TimeLimit, time_limit)
         self.model.update()
+        #debug
+        # self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
         self.model.optimize()
-
     def process_solution_from_model(self):
         self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
@@ -295,7 +298,7 @@ class ModelSolver:
         for (f, i, j), value in self.x_pos.items():
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j)
+                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_infe")
 
                 if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
                     continue
@@ -305,7 +308,7 @@ class ModelSolver:
         for (f, i, j), value in self.x_neg.items():
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j)
+                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_fe")
 
                 if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
                     continue
@@ -314,7 +317,7 @@ class ModelSolver:
 
         for (i, j), value in self.x_p.items():
             if value.X > 0.99:
-                self.modify_df_arc_with_attr("path_type", i, j)
+                self.modify_df_arc_with_attr("path_type", i, j, tag="change")
 
                 if ((i, j) in modify_dict) or ((j, i) in modify_dict):
                     continue
@@ -336,21 +339,37 @@ class ModelSolver:
                 "config": self.config,
                 "data_holder": self.data_holder}
 
-    def modify_df_arc_with_attr(self, attr_name, i, j):
+    def modify_df_arc_with_attr(self, attr_name, i, j, tag):
         row = self.get_row_info_by_arc(i, j)
 
         if attr_name == "curb_height_max":
-            # 需要修改高度
-            row[attr_name] = self.config.user_model["max_curb_height"]
+            if tag == "to_fe":
+                # 需要修改高度
+                row[attr_name] = self.config.user_model["max_curb_height"]
+            elif tag=="to_infe":
+                row[attr_name] = self.config.user_model["max_curb_height"]+1
         elif attr_name == "obstacle_free_width_float":
-            row[attr_name] = self.config.user_model["min_sidewalk_width"]
+            if tag == "to_fe":
+                row[attr_name] = self.config.user_model["min_sidewalk_width"]
+            elif tag=="to_infe":
+                row[attr_name] = self.config.user_model["min_sidewalk_width"] - 1
         elif attr_name == "path_type":
             row[attr_name] = ("bike" if row[attr_name] == "walk" else "walk")
 
         if row['modified'] is None:
-            row['modified'] = [attr_name]
+            row['modified'] = [f"{tag}_{attr_name}"]
         else:
-            row['modified'].append(attr_name)
+            row['modified'].append(f"{tag}_{attr_name}")
 
         self.data_holder.row_data.update({(i, j): row})
         self.org_map_df.loc[row.name] = row
+
+    def print_infeasible(self,model):
+        model.computeIIS()
+        infeasible_list = []
+        for cons in model.getConstrs():
+            if cons.IISConstr:
+                print(cons.constrName)
+                infeasible_list.append(cons.constrName)
+        model.write('model.ilp')
+        return infeasible_list
