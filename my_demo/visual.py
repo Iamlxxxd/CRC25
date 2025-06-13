@@ -171,6 +171,7 @@ def visual_map_explore(visual_dict: dict,file_path):
 def visual_map_foil_modded(visual_dict: dict, file_path):
     import geopandas as gpd
     import branca
+    import folium
 
     org_map_df = visual_dict.get("org_map_df")
     df_path_foil = visual_dict.get("df_path_foil")
@@ -180,8 +181,9 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
     m = org_map_df.explore(
         color="lightgrey",
         tiles="CartoDB Voyager",
-        style_kwds=dict(weight=1),
-        legend=False
+        style_kwds=dict(weight=2),
+        legend=False,
+        name="base"
     )
 
 
@@ -198,7 +200,7 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
         m = not_in_foil.explore(
             m=m,
             color="grey",
-            style_kwds=dict(weight=7),
+            style_kwds=dict(weight=4),
             name="not modified",
             legend=False
         )
@@ -206,7 +208,15 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
     df_path_fact = visual_dict.get("df_path_fact")
     df_path_fact = df_path_fact.set_crs(meta_map['CRS'])
     df_path_fact = df_path_fact.to_crs(org_map_df.crs)
-    m = df_path_fact.explore(m=m, color="black", style_kwds=dict(weight=7), name="fact route", legend=False)
+    if not df_path_fact.empty:
+        m = df_path_fact.explore(
+            m=m,
+            color="black",
+            style_kwds=dict(weight=7),
+            name="fact route",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "fact route"}
+        )
 
     # 画所有modded且不在foil_path的边（橘红色，宽度7）
     modded_not_in_foil = org_map_df[(org_map_df['modded']) & (~org_map_df['in_foil'])]
@@ -215,36 +225,39 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
             m=m,
             color="orange",
             style_kwds=dict(weight=7),
-            name="modified not in foil",
-            legend=False
+            name="modded not in foil",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "modded not in foil"}
         )
 
-    # 只保留路径上的边
+    # ----------- 图层4：Foil Route（交替黑/橙/红） -----------
     foil_edges = org_map_df[org_map_df['in_foil']].sort_values(by='arc', key=lambda x: x.map(arc2idx))
-
-    # 生成着色列表
+    foil_edges = foil_edges.copy()
     color_list = []
     last_color = None
     for _, row in foil_edges.iterrows():
         if row['modded']:
-            # 交替着色
             color = 'orange' if last_color != 'orange' else 'red'
             last_color = color
         else:
             color = 'black'
         color_list.append(color)
-    foil_edges = foil_edges.copy()
     foil_edges['color'] = color_list
 
-    #画foil路径上的边
+    foil_group = folium.FeatureGroup(name="Foil Route", show=True)
+    # 获取所有字段名，常用如 arc, modified
+    tooltip_fields = [col for col in foil_edges.columns if col not in ['geometry']]
     for _, row in foil_edges.iterrows():
-        m = gpd.GeoDataFrame([row], crs=org_map_df.crs).explore(
-            m=m,
-            color=row['color'],
-            style_kwds=dict(weight=7),
-            name="foil route",
-            legend=False
-        )
+        geo = gpd.GeoDataFrame([row], crs=org_map_df.crs)
+        folium.GeoJson(
+            geo,
+            style_function=lambda x, color=row['color']: {"color": color, "weight": 7},
+            tooltip=folium.GeoJsonTooltip(fields=tooltip_fields)
+        ).add_to(foil_group)
+    foil_group.add_to(m)
+
+    # 添加LayerControl控件
+    folium.LayerControl(collapsed=False).add_to(m)
 
     m.save(os.path.join(file_path, "map_foil_modded.html"))
     return m

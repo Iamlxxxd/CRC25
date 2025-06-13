@@ -233,14 +233,14 @@ class ModelSolver:
                 self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
+                # self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         for f, arcs in self.data_holder.all_infeasible_both_way.items():
             for i, j in arcs:
                 self.model.addConstr(self.x_neg[f, i, j] + self.x_neg[f, j, i] <= 1, name="ua_neg_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
                 self.model.addConstr(self.x_p[i, j] + self.x_p[j, i] <= 1, name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
+                # self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         # Shortest Path Constraints
         for i, j in self.data_holder.all_arcs:
