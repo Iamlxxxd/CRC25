@@ -19,7 +19,7 @@ from my_demo.config import Config
 from my_demo.mip.DataHolder import DataHolder
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
-from utils.common_utils import set_seed, ensure_crs, correct_arc_direction,get_constraint_string
+from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string
 from gurobipy import *
 
 
@@ -242,9 +242,9 @@ class ModelSolver:
 
         for f, arcs in self.data_holder.all_infeasible_both_way.items():
             for i, j in arcs:
-                self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i] , name="ua_neg_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i], name="ua_neg_[{},{}]".format(i, j))
                 # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
-                self.model.addConstr(self.x_p[i, j] ==self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
+                self.model.addConstr(self.x_p[i, j] == self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
                 self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
 
         # Shortest Path Constraints
@@ -264,6 +264,8 @@ class ModelSolver:
 
             self.model.addConstr(self.y[i, j] == 1, "foil_y_[{},{}]".format(i, j))
 
+        self.model.addConstr(self.w[self.data_holder.start_node]==0,"w_start")
+        self.model.addConstr(self.w[self.data_holder.end_node]==self.data_holder.foil_cost,"w_end")
         # todo 会让一些无关紧要的变量也赋值
         # x_pos_sum = quicksum((self.x_pos[k, i, j] for k in self.data_holder.all_feasible_arcs
         #                       for (i, j) in self.data_holder.all_feasible_arcs[k]))
@@ -271,7 +273,8 @@ class ModelSolver:
         #                       for (i, j) in self.data_holder.all_infeasible_arcs[k]))
         # x_p_sum = self.x_p.sum()
         # self.model.setObjective(x_pos_sum + x_neg_sum + x_p_sum, GRB.MINIMIZE)
-        self.model.setObjective(self.x_pos.sum() + self.x_neg.sum() + self.x_p.sum() +2000*self.y.sum(), GRB.MINIMIZE)
+        self.model.setObjective(self.x_pos.sum() + self.x_neg.sum() + self.x_p.sum(),
+                                GRB.MINIMIZE)
 
     def solve_model(self, time_limit=3600, gap=0.01):
         self.model.setParam(GRB.Param.MIPGap, gap)
@@ -281,9 +284,25 @@ class ModelSolver:
         self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
         self.model.optimize()
 
+        if self.model.status == 3 or self.model.status == 4 or self.model.status == 5:
+            self.print_infeasible(self.model)
     def process_solution_from_model(self):
         self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
+
+        self.org_map_df['w_i'] = 0
+        self.org_map_df['w_j'] = 0
+        for idx,row in self.org_map_df.iterrows():
+            arc = row['arc']
+            self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].X
+            self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].X
+
+        self.df_path_foil['w_i'] = 0
+        self.df_path_foil['w_j'] = 0
+        for idx,row in self.df_path_foil.iterrows():
+            arc = row['arc']
+            self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].X
+            self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].X
 
     def get_best_route_df_from_solution(self):
         self.org_map_df = handle_weight_with_recovery(self.org_map_df, self.config.user_model)
@@ -310,7 +329,7 @@ class ModelSolver:
 
         for (f, i, j), value in self.x_neg.items():
             if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                    continue
+                continue
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
                 self.modify_df_arc_with_attr(attr_name, i, j, tag="to_fe")
