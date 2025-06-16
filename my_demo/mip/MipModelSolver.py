@@ -281,7 +281,7 @@ class ModelSolver:
         self.model.setParam(GRB.Param.TimeLimit, time_limit)
         self.model.update()
         # debug
-        self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
+        # self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
         self.model.optimize()
 
         if self.model.status == 3 or self.model.status == 4 or self.model.status == 5:
