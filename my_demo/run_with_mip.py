@@ -15,6 +15,7 @@ import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
 from my_demo.mip.MipModelSolver import ModelSolver
+from my_demo.mip.MipModelSolverNew import ModelSolverNew
 
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
@@ -45,7 +46,8 @@ def main():
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
 
-    solver = ModelSolver(config)
+    solver = ModelSolverNew(config)
+    # solver = ModelSolver(config)
     solver.init_model()
     solver.solve_model()
     solver.process_solution_from_model()

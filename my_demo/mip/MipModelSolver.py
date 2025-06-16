@@ -160,8 +160,17 @@ class ModelSolver:
         df['obstacle_free_width_float_include'] = (df['obstacle_free_width_float']
                                                    .apply(lambda x: x >= self.config.user_model["min_sidewalk_width"]))
 
+        df[["Deleta_p", "Deleta_n"]] = df.apply(
+            lambda x: (0, 1) if x['curb_height_max_include'] and x['obstacle_free_width_float_include']
+            else (2, 0) if not x['curb_height_max_include'] and not x['obstacle_free_width_float_include']
+            else (1, 0),
+            axis=1,
+            result_type="expand"
+        )
+
         # Define weight (combination of objectives)
         df['c'] = df['length']
+        df['d'] = 0
 
         df.loc[df['crossing'] == 'Yes', 'c'] = df['length'] * user_model["crossing_weight_factor"]
 
