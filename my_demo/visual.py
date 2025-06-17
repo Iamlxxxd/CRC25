@@ -223,8 +223,8 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
         best_route = best_route.set_crs(meta_map['CRS'])
         best_route = best_route.to_crs(org_map_df.crs)
         m = best_route.explore(m=m,
-            color="lightblue",
-            style_kwds=dict(weight=7),
+            color="#00A1FF",
+            style_kwds=dict(weight=10),
             name="best route",
             legend=False,
             layer_kwds={"show": True, "overlay": True, "control": True, "group": "best route"}
@@ -235,7 +235,7 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
     if not modded_not_in_foil.empty:
         m = modded_not_in_foil.explore(
             m=m,
-            color="orange",
+            color="red",
             style_kwds=dict(weight=7),
             name="modded not in foil",
             legend=False,
@@ -252,7 +252,7 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
             color = 'orange' if last_color != 'orange' else 'red'
             last_color = color
         else:
-            color = 'black'
+            color = '#F5A623'
         color_list.append(color)
     foil_edges['color'] = color_list
 
@@ -263,7 +263,7 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
         geo = gpd.GeoDataFrame([row], crs=org_map_df.crs)
         folium.GeoJson(
             geo,
-            style_function=lambda x, color=row['color']: {"color": color, "weight": 7},
+            style_function=lambda x, color=row['color']: {"color": color, "weight": 6},
             tooltip=folium.GeoJsonTooltip(fields=tooltip_fields)
         ).add_to(foil_group)
     foil_group.add_to(m)
@@ -271,5 +271,29 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
     # 添加LayerControl控件
     folium.LayerControl(collapsed=False).add_to(m)
 
+    legend_html = """
+    <div style="position: fixed; 
+                top: 45px; right: 10px; width: 200px; height: auto;
+                border:2px solid grey; z-index:9999; font-size:14px; background-color:white; opacity: 0.85;">
+      <b>color of line</b><br>
+      <span style="display:inline-block;width:20px;height:4px;background:grey;margin-right:5px;"></span>not modified<br>
+      <span style="display:inline-block;width:20px;height:4px;background:black;margin-right:5px;"></span>fact route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:#00A1FF;margin-right:5px;"></span>best route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:red;margin-right:5px;"></span>modded not in foil<br>
+      <span style="display:inline-block;width:20px;height:4px;background:orange;margin-right:5px;"></span>Foil Route<br>
+    </div>
+    """
+
+    # 新增：根据show_data生成图例
+    show_data = visual_dict.get("show_data")
+    if show_data:
+        show_data_html = '<div style="position: fixed; top: 260px; right: 10px; width: 220px; height: auto; border:2px solid grey; z-index:9999; font-size:14px; background-color:white; opacity: 0.85; padding: 8px;">'
+        show_data_html += "<b>Data Info</b><br>"
+        for k, v in show_data.items():
+            show_data_html += f"<span style='font-weight:bold'>{k}:</span> {v}<br>"
+        show_data_html += "</div>"
+        legend_html += show_data_html
+
+    m.get_root().html.add_child(branca.element.Element(legend_html))
     m.save(os.path.join(file_path, "map_foil_modded.html"))
     return m

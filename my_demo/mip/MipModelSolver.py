@@ -65,6 +65,7 @@ class ModelSolver:
         self.process_nodes()
         self.process_arcs()
         self.process_foil()
+        self.process_fact()
         pass
 
     def process_nodes(self):
@@ -97,7 +98,8 @@ class ModelSolver:
             if pd.isna(row['bikepath_id']):
                 # 双向路
                 self.data_holder.all_arcs.append((node1, node2))
-                self.data_holder.all_arcs.append((node2, node1))
+                if node1 != node2:
+                    self.data_holder.all_arcs.append((node2, node1))
 
                 for attr_name in self.data_holder.features:
                     ez_attr = self.eazy_name_map[attr_name]
@@ -105,10 +107,12 @@ class ModelSolver:
                         self.data_holder.all_feasible_both_way[ez_attr].append((node1, node2))
 
                         self.data_holder.all_feasible_arcs[ez_attr].append((node1, node2))
-                        self.data_holder.all_feasible_arcs[ez_attr].append((node2, node1))
+                        if node1 != node2:
+                            self.data_holder.all_feasible_arcs[ez_attr].append((node2, node1))
                     else:
                         self.data_holder.all_infeasible_arcs[ez_attr].append((node1, node2))
-                        self.data_holder.all_infeasible_arcs[ez_attr].append((node2, node1))
+                        if node1 != node2:
+                            self.data_holder.all_infeasible_arcs[ez_attr].append((node2, node1))
 
                         self.data_holder.all_infeasible_both_way[ez_attr].append((node1, node2))
             else:
@@ -138,6 +142,9 @@ class ModelSolver:
         self.data_holder.foil_cost = foil_cost
         self.data_holder.foil_route_arcs = self.df_path_foil['arc'].tolist()
 
+    def process_fact(self):
+        get_nodes = lambda x: (self.data_holder.point_id_map.get(x.coords[0]),
+                               self.data_holder.point_id_map.get(x.coords[1]))
         fact_cost = 0
         self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
         for idx, row in self.df_path_fact.iterrows():
@@ -154,8 +161,20 @@ class ModelSolver:
         # arrow
         df.loc[df['obstacle_free_width_float'] < user_model["min_sidewalk_width"], 'include'] = 0
 
-        df['curb_height_max_include'] = (df['curb_height_max']
-                                         .apply(lambda x: x <= self.config.user_model["max_curb_height"]))
+        # 高度是不是能改
+        df['modify_able_curb_height_max'] = df["crossing_type"] == "curb_height"
+
+        # 路径类型是不是能改
+        df['modify_able_path_type'] = (df["path_type"] == "walk") | (df["path_type"] == "bike")
+
+        # 高度不能改 或者满足条件
+        df['curb_height_max_include'] = (df
+                                         .apply(lambda x:
+                                                (not x['modify_able_curb_height_max'])
+                                                or (x['curb_height_max'] <= self.config.user_model["max_curb_height"]),
+                                                axis=1
+                                                )
+                                         )
 
         df['obstacle_free_width_float_include'] = (df['obstacle_free_width_float']
                                                    .apply(lambda x: x >= self.config.user_model["min_sidewalk_width"]))
@@ -169,7 +188,7 @@ class ModelSolver:
         )
 
         # Define weight (combination of objectives)
-        df['c'] = df['length']
+        df['c'] = np.where(pd.isna(df['length']), 0, df['length'])
         df['d'] = 0
 
         df.loc[df['crossing'] == 'Yes', 'c'] = df['c'] * user_model["crossing_weight_factor"]
@@ -213,7 +232,7 @@ class ModelSolver:
 
         self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
         self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
-        self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, lb=0,name="w_")
+        self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, lb=0, name="w_")
         big_m = self.data_holder.M * 4
 
         # Arc Feasibility Constraints
@@ -273,8 +292,8 @@ class ModelSolver:
 
             self.model.addConstr(self.y[i, j] == 1, "foil_y_[{},{}]".format(i, j))
 
-        self.model.addConstr(self.w[self.data_holder.start_node] == 0, "w_start")
-        self.model.addConstr(self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end")
+        # self.model.addConstr(self.w[self.data_holder.start_node] == 0, "w_start")
+        # self.model.addConstr(self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end")
         # todo 会让一些无关紧要的变量也赋值
         # x_pos_sum = quicksum((self.x_pos[k, i, j] for k in self.data_holder.all_feasible_arcs
         #                       for (i, j) in self.data_holder.all_feasible_arcs[k]))
@@ -299,31 +318,37 @@ class ModelSolver:
     def process_solution_from_model(self):
         self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
+        self.data_holder.final_weight = self.org_map_df.set_index("arc").to_dict()['my_weight']
         self.fill_w_value_for_visual()
 
     def fill_w_value_for_visual(self):
         self.org_map_df['w_i'] = 0
         self.org_map_df['w_j'] = 0
+        self.org_map_df['y_ij'] = 0
         for idx, row in self.org_map_df.iterrows():
             arc = row['arc']
             self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].X
             self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].X
-
+            self.org_map_df.at[row.name, "y_ij"] = self.y[arc].X
         self.df_path_foil['w_i'] = 0
         self.df_path_foil['w_j'] = 0
+        self.df_path_foil['y_ij'] = 0
         for idx, row in self.df_path_foil.iterrows():
             arc = row['arc']
             self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].X
             self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].X
+            self.df_path_foil.at[row.name, "y_ij"] = self.y[arc].X
 
     def get_best_route_df_from_solution(self):
-        self.org_map_df = handle_weight(self.org_map_df, self.config.user_model)
+        self.org_map_df = handle_weight_with_recovery(self.org_map_df, self.config.user_model)
 
         _, best_graph = create_network_graph(self.org_map_df)
 
         origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
         _, _, self.df_best_route = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
-        self.df_best_route.sort_values(by=['arc'], inplace=True)
+        self.df_best_route = correct_arc_direction(self.df_best_route, self.data_holder.start_node,
+                                                   self.data_holder.end_node)
+        pass
 
     def modify_org_map_df_by_solution(self):
 
@@ -371,7 +396,8 @@ class ModelSolver:
                 "best_route": self.df_best_route,
                 "org_map_df": self.org_map_df,
                 "config": self.config,
-                "data_holder": self.data_holder}
+                "data_holder": self.data_holder,
+                "show_data": self.data_holder.visual_detail_info}
 
     def modify_df_arc_with_attr(self, i, j, tag, attr_name):
         row = self.get_row_info_by_arc(i, j)
@@ -386,7 +412,7 @@ class ModelSolver:
             if tag == "to_fe":
                 row[attr_name] = self.config.user_model["min_sidewalk_width"]
             elif tag == "to_infe":
-                row[attr_name] = self.config.user_model["min_sidewalk_width"] - 1
+                row[attr_name] = max(self.config.user_model["min_sidewalk_width"] - 1, 0)
         elif attr_name == "path_type":
             row[attr_name] = ("bike" if row[attr_name] == "walk" else "walk")
 

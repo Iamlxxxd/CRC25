@@ -23,6 +23,7 @@ class DataHolder:
     all_infeasible_dir_arcs = defaultdict(list)
 
     M:float
+    visual_detail_info=dict()
 
     def __init__(self):
         pass

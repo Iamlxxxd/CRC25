@@ -42,7 +42,7 @@ class ModelSolverNew(ModelSolver):
         for i, j in self.data_holder.foil_route_arcs:
             row_data = self.get_row_info_by_arc(i, j)
 
-            self.model += self.w[j] - self.w[i] <= row_data['c'] + row_data['d'] * self.x[i][j] - big_m * (
+            self.model += self.w[j] - self.w[i] >= row_data['c'] + row_data['d'] * self.x[i][j] - big_m * (
                     1 - self.y[i][j]), "sp_foil_[{},{}]".format(i, j)
             self.model += self.y[i][j] == 1, "foil_y_[{},{}]".format(i, j)
 
@@ -58,8 +58,14 @@ class ModelSolverNew(ModelSolver):
                 self.model += self.x[i][j] == self.x[j][i], "ua_neg_[{},{},{}]".format(f, i, j)
                 self.model += self.y[i][j] == self.y[j][i], "ua_y_neg_[{},{},{}]".format(f, i, j)
 
-        self.model += self.w[self.data_holder.start_node] == 0, "w_start"
-        self.model += self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end"
+        # self.model += self.w[self.data_holder.start_node] == 0, "w_start"
+        # self.model += self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end"
+
+        # can not modify path_type
+        for i, j in self.data_holder.all_arcs:
+            row_data = self.get_row_info_by_arc(i, j)
+            if not row_data['modify_able_path_type']:
+                self.model += self.x[i][j] == 0, "no_x_[{},{}]".format(i, j)
 
         obj = 0
         for i, j in self.data_holder.all_arcs:
@@ -68,32 +74,33 @@ class ModelSolverNew(ModelSolver):
 
         self.model += obj, "obj"
 
-    def solve_model(self, time_limit=3600, gap=0.01):
+    def solve_model(self, time_limit=3600, gap=0):
         solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
                                  logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
 
     def modify_org_map_df_by_solution(self):
         # todo unfinished
-        modify_dict = set()
+        feature_modify_mark = set()
         self.graph_error = 0
         for i, j_dict in self.y.items():
             for j, value in j_dict.items():
-                if (i, j) in modify_dict or (j, i) in modify_dict:
+                if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
                     continue
                 if value.varValue > 0.99:
                     self.modify_df_arc_with_attr(i, j, "to_fe")
                 else:
                     self.modify_df_arc_with_attr(i, j, "to_infe")
-                modify_dict.add((i, j))
+                feature_modify_mark.add((i, j))
 
+        type_modify_mark = set()
         for i, j_dict in self.x.items():
             for j, value in j_dict.items():
-                if (i, j) in modify_dict or (j, i) in modify_dict:
+                if (i, j) in type_modify_mark or (j, i) in type_modify_mark:
                     continue
                 if value.varValue > 0.99:
                     self.modify_df_arc_with_attr(i, j, "change")
-                    modify_dict.add((i, j))
+                    type_modify_mark.add((i, j))
 
     def modify_df_arc_with_attr(self, i, j, tag, attr_name=None):
         row = self.get_row_info_by_arc(i, j)
@@ -105,14 +112,15 @@ class ModelSolverNew(ModelSolver):
                 modified_list.append(f"{tag}_curb_height_max")
                 self.graph_error += 1
             if not row['obstacle_free_width_float_include']:
-                row['obstacle_free_width'] = self.config.user_model["min_sidewalk_width"]
-                modified_list.append(f"{tag}_obstacle_free_width")
+                row['obstacle_free_width_float'] = self.config.user_model["min_sidewalk_width"]
+                modified_list.append(f"{tag}_obstacle_free_width_float")
                 self.graph_error += 1
 
         elif tag == "to_infe":
-            if row['curb_height_max_include'] and row['obstacle_free_width_include']:
-                row['curb_height_max'] = self.config.user_model["max_curb_height"] + 1
-                modified_list.append(f"{tag}_curb_height_max")
+            if row['curb_height_max_include'] and row['obstacle_free_width_float_include']:
+                # 因为 改变这个属性没有限制 改变高度需要判断路径类型
+                row['obstacle_free_width_float'] = max(self.config.user_model["min_sidewalk_width"] - 1, 0)
+                modified_list.append(f"{tag}_obstacle_free_width_float")
                 self.graph_error += 1
 
         elif tag == "change":
@@ -131,19 +139,51 @@ class ModelSolverNew(ModelSolver):
     def fill_w_value_for_visual(self):
         self.org_map_df['w_i'] = 0
         self.org_map_df['w_j'] = 0
+        self.org_map_df['y_ij'] = 0
+
         for idx, row in self.org_map_df.iterrows():
             arc = row['arc']
             self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].varValue
             self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].varValue
+            self.org_map_df.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]].varValue
 
         self.df_path_foil['w_i'] = 0
         self.df_path_foil['w_j'] = 0
+        self.df_path_foil['y_ij'] = 0
+
+        cost = 0
         for idx, row in self.df_path_foil.iterrows():
             arc = row['arc']
             self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].varValue
             self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].varValue
+            self.df_path_foil.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]].varValue
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["foil_cost"] = round(cost, 4)
 
+        self.df_best_route['w_i'] = 0
+        self.df_best_route['w_j'] = 0
+        self.df_best_route['y_ij'] = 0
+        cost = 0
         for idx, row in self.df_best_route.iterrows():
             arc = row['arc']
             self.df_best_route.at[row.name, "w_i"] = self.w[arc[0]].varValue
             self.df_best_route.at[row.name, "w_j"] = self.w[arc[1]].varValue
+            self.df_best_route.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]].varValue
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["best_cost"] = round(cost, 4)
+
+        self.df_path_fact['w_i'] = 0
+        self.df_path_fact['w_j'] = 0
+        self.df_path_fact['y_ij'] = 0
+        cost = 0
+        for idx, row in self.df_path_fact.iterrows():
+            arc = row['arc']
+            self.df_path_fact.at[row.name, "w_i"] = self.w[arc[0]].varValue
+            self.df_path_fact.at[row.name, "w_j"] = self.w[arc[1]].varValue
+            self.df_path_fact.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]].varValue
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["fact_cost"] = round(cost, 4)
+        pass

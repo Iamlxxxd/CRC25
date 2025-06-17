@@ -53,10 +53,10 @@ def main():
     solver.process_solution_from_model()
 
     visual_data = solver.process_visual_data()
-    # 保存为pickle 方便可视化调试
-    visual_pkl_path = os.path.join(base_dir, "my_demo", "output", "visual", "visual_data.pkl")
-    with open(visual_pkl_path, "wb") as f:
-        pickle.dump(visual_data, f)
+    # # 保存为pickle 方便可视化调试
+    # visual_pkl_path = os.path.join(base_dir, "my_demo", "output", "visual", "visual_data.pkl")
+    # with open(visual_pkl_path, "wb") as f:
+    #     pickle.dump(visual_data, f)
 
     visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
