@@ -9,6 +9,7 @@ from my_demo.config import Config
 from my_demo.mip.MipModelSolver import ModelSolver
 import pulp
 from collections import defaultdict
+import os
 
 
 class ModelSolverNew(ModelSolver):
@@ -29,7 +30,7 @@ class ModelSolverNew(ModelSolver):
             self.y[i].update({j: pulp.LpVariable(f"y_[{i},{j}]", cat=pulp.LpBinary)})
 
         for i in self.data_holder.all_nodes:
-            self.w[i] = pulp.LpVariable(f"w_[{i}]", cat=pulp.LpContinuous)
+            self.w[i] = pulp.LpVariable(f"w_[{i}]", lowBound=0, cat=pulp.LpContinuous)
 
         # Shortest Path Constraints
         for i, j in self.data_holder.all_arcs:
@@ -68,38 +69,81 @@ class ModelSolverNew(ModelSolver):
         self.model += obj, "obj"
 
     def solve_model(self, time_limit=3600, gap=0.01):
-        solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit,keepFiles=False)
+        solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
+                                 logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
 
     def modify_org_map_df_by_solution(self):
         # todo unfinished
-        modify_dict = defaultdict(list)
+        modify_dict = set()
         self.graph_error = 0
-        for (f, i, j), value in self.x_pos.items():
-            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_infe")
+        for i, j_dict in self.y.items():
+            for j, value in j_dict.items():
+                if (i, j) in modify_dict or (j, i) in modify_dict:
+                    continue
+                if value.varValue > 0.99:
+                    self.modify_df_arc_with_attr(i, j, "to_fe")
+                else:
+                    self.modify_df_arc_with_attr(i, j, "to_infe")
+                modify_dict.add((i, j))
 
+        for i, j_dict in self.x.items():
+            for j, value in j_dict.items():
+                if (i, j) in modify_dict or (j, i) in modify_dict:
+                    continue
+                if value.varValue > 0.99:
+                    self.modify_df_arc_with_attr(i, j, "change")
+                    modify_dict.add((i, j))
+
+    def modify_df_arc_with_attr(self, i, j, tag, attr_name=None):
+        row = self.get_row_info_by_arc(i, j)
+        modified_list = []
+
+        if tag == "to_fe":
+            if not row['curb_height_max_include']:
+                row['curb_height_max'] = self.config.user_model["max_curb_height"]
+                modified_list.append(f"{tag}_curb_height_max")
                 self.graph_error += 1
-                modify_dict[(f, i, j)].append(attr_name)
-
-        for (f, i, j), value in self.x_neg.items():
-            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_fe")
-
+            if not row['obstacle_free_width_float_include']:
+                row['obstacle_free_width'] = self.config.user_model["min_sidewalk_width"]
+                modified_list.append(f"{tag}_obstacle_free_width")
                 self.graph_error += 1
-                modify_dict[(f, i, j)].append(attr_name)
 
-        for (i, j), value in self.x_p.items():
-            if ((i, j) in modify_dict) or ((j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                self.modify_df_arc_with_attr("path_type", i, j, tag="change")
-
+        elif tag == "to_infe":
+            if row['curb_height_max_include'] and row['obstacle_free_width_include']:
+                row['curb_height_max'] = self.config.user_model["max_curb_height"] + 1
+                modified_list.append(f"{tag}_curb_height_max")
                 self.graph_error += 1
-                modify_dict[(i, j)].append("path_type")
+
+        elif tag == "change":
+            row["path_type"] = ("bike" if row["path_type"] == "walk" else "walk")
+            modified_list.append(f"{tag}_path_type")
+            self.graph_error += 1
+
+        if row['modified'] is None:
+            row['modified'] = modified_list
+        else:
+            row['modified'] = row['modified'] + modified_list
+
+        self.data_holder.row_data.update({(i, j): row})
+        self.org_map_df.loc[row.name] = row
+
+    def fill_w_value_for_visual(self):
+        self.org_map_df['w_i'] = 0
+        self.org_map_df['w_j'] = 0
+        for idx, row in self.org_map_df.iterrows():
+            arc = row['arc']
+            self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].varValue
+            self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].varValue
+
+        self.df_path_foil['w_i'] = 0
+        self.df_path_foil['w_j'] = 0
+        for idx, row in self.df_path_foil.iterrows():
+            arc = row['arc']
+            self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].varValue
+            self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].varValue
+
+        for idx, row in self.df_best_route.iterrows():
+            arc = row['arc']
+            self.df_best_route.at[row.name, "w_i"] = self.w[arc[0]].varValue
+            self.df_best_route.at[row.name, "w_j"] = self.w[arc[1]].varValue

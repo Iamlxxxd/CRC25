@@ -138,12 +138,12 @@ class ModelSolver:
         self.data_holder.foil_cost = foil_cost
         self.data_holder.foil_route_arcs = self.df_path_foil['arc'].tolist()
 
-
         fact_cost = 0
         self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
         for idx, row in self.df_path_fact.iterrows():
             fact_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
         self.data_holder.fact_cost = fact_cost
+
     def handle_weight_without_preference(self, df: GeoDataFrame):
         user_model = self.config.user_model
 
@@ -172,7 +172,7 @@ class ModelSolver:
         df['c'] = df['length']
         df['d'] = 0
 
-        df.loc[df['crossing'] == 'Yes', 'c'] = df['length'] * user_model["crossing_weight_factor"]
+        df.loc[df['crossing'] == 'Yes', 'c'] = df['c'] * user_model["crossing_weight_factor"]
 
         coef_perferred = ((1 - user_model["walk_bike_preference_weight_factor"]) / user_model[
             "walk_bike_preference_weight_factor"])
@@ -213,7 +213,7 @@ class ModelSolver:
 
         self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
         self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
-        self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, name="w_")
+        self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, lb=0,name="w_")
         big_m = self.data_holder.M * 4
 
         # Arc Feasibility Constraints
@@ -273,8 +273,8 @@ class ModelSolver:
 
             self.model.addConstr(self.y[i, j] == 1, "foil_y_[{},{}]".format(i, j))
 
-        self.model.addConstr(self.w[self.data_holder.start_node]==0,"w_start")
-        self.model.addConstr(self.w[self.data_holder.end_node]==self.data_holder.foil_cost,"w_end")
+        self.model.addConstr(self.w[self.data_holder.start_node] == 0, "w_start")
+        self.model.addConstr(self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end")
         # todo 会让一些无关紧要的变量也赋值
         # x_pos_sum = quicksum((self.x_pos[k, i, j] for k in self.data_holder.all_feasible_arcs
         #                       for (i, j) in self.data_holder.all_feasible_arcs[k]))
@@ -295,26 +295,29 @@ class ModelSolver:
 
         if self.model.status == 3 or self.model.status == 4 or self.model.status == 5:
             self.print_infeasible(self.model)
+
     def process_solution_from_model(self):
         self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
+        self.fill_w_value_for_visual()
 
+    def fill_w_value_for_visual(self):
         self.org_map_df['w_i'] = 0
         self.org_map_df['w_j'] = 0
-        for idx,row in self.org_map_df.iterrows():
+        for idx, row in self.org_map_df.iterrows():
             arc = row['arc']
             self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].X
             self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].X
 
         self.df_path_foil['w_i'] = 0
         self.df_path_foil['w_j'] = 0
-        for idx,row in self.df_path_foil.iterrows():
+        for idx, row in self.df_path_foil.iterrows():
             arc = row['arc']
             self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].X
             self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].X
 
     def get_best_route_df_from_solution(self):
-        self.org_map_df = handle_weight_with_recovery(self.org_map_df, self.config.user_model)
+        self.org_map_df = handle_weight(self.org_map_df, self.config.user_model)
 
         _, best_graph = create_network_graph(self.org_map_df)
 
@@ -331,7 +334,7 @@ class ModelSolver:
                 continue
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_infe")
+                self.modify_df_arc_with_attr(i, j, "to_infe", attr_name)
 
                 self.graph_error += 1
                 modify_dict[(f, i, j)].append(attr_name)
@@ -341,7 +344,7 @@ class ModelSolver:
                 continue
             if value.X > 0.99:
                 attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(attr_name, i, j, tag="to_fe")
+                self.modify_df_arc_with_attr(i, j, "to_fe", attr_name)
 
                 self.graph_error += 1
                 modify_dict[(f, i, j)].append(attr_name)
@@ -350,7 +353,7 @@ class ModelSolver:
             if ((i, j) in modify_dict) or ((j, i) in modify_dict):
                 continue
             if value.X > 0.99:
-                self.modify_df_arc_with_attr("path_type", i, j, tag="change")
+                self.modify_df_arc_with_attr(i, j, "change", "path_type")
 
                 self.graph_error += 1
                 modify_dict[(i, j)].append("path_type")
@@ -370,7 +373,7 @@ class ModelSolver:
                 "config": self.config,
                 "data_holder": self.data_holder}
 
-    def modify_df_arc_with_attr(self, attr_name, i, j, tag):
+    def modify_df_arc_with_attr(self, i, j, tag, attr_name):
         row = self.get_row_info_by_arc(i, j)
 
         if attr_name == "curb_height_max":
