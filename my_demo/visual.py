@@ -168,7 +168,7 @@ def visual_map_explore(visual_dict: dict,file_path):
     return m
 
 
-def visual_map_foil_modded(visual_dict: dict, file_path):
+def visual_map_foil_modded(visual_dict: dict, file_path,tag):
     import geopandas as gpd
     import branca
     import folium
@@ -295,5 +295,5 @@ def visual_map_foil_modded(visual_dict: dict, file_path):
         legend_html += show_data_html
 
     m.get_root().html.add_child(branca.element.Element(legend_html))
-    m.save(os.path.join(file_path, "map_foil_modded.html"))
+    m.save(os.path.join(file_path, f"{tag}_visual.html"))
     return m

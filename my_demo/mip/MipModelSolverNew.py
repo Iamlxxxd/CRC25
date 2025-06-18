@@ -78,7 +78,6 @@ class ModelSolverNew(ModelSolver):
         solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
                                  logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
-
     def modify_org_map_df_by_solution(self):
         # todo unfinished
         feature_modify_mark = set()
