@@ -38,16 +38,24 @@ def get_attributes(G, attrs_variable_names):
 
     return attributes
     
+def handle_non_hashable_columns(df):
+    # 获取所有列
+    for col in df.columns:
+        # 检查列中是否有不可哈希的类型
+        if df[col].apply(lambda x: isinstance(x, (list, dict))).any():
+            # 如果是 list 或 dict，则将其转为字符串
+            df[col] = df[col].apply(lambda x: str(x) if isinstance(x, (list, dict)) else x)
+    return df
 
 def remove_redundant_edges(df_route, attrs_variable_names):
     # Convert geometry to hashable WKT for duplicate detection
-    df_handle = df_route.copy()
+    df_handle = handle_non_hashable_columns(df_route.copy())
     df_handle['geometry_wkt'] = df_handle.geometry.apply(lambda g: g.wkt)
     
     # Check duplicates across all attributes + geometry
     cols = [c for c in df_handle.columns if c not in attrs_variable_names + ['geometry', 'geometry_wkt']]
     cols.append('geometry_wkt')  # Include hashed geometry
-    
+
     # Keep first occurrence of duplicates
     df_dedup = df_handle.drop_duplicates(subset=cols).drop(columns='geometry_wkt')
     

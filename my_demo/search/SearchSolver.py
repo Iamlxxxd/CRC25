@@ -2,7 +2,7 @@
 """
 @email  :    lvxiangdong2qq@163.com
 @auther :    XiangDongLv
-@time   :    2025/6/6 10:35
+@time   :    2025/6/19 14:25
 @project:    CRC25
 """
 from my_demo.config import Config
@@ -16,14 +16,16 @@ from networkx.classes import DiGraph
 from tqdm import tqdm
 from collections import defaultdict
 from my_demo.config import Config
-from my_demo.mip.MipDataHolder import MipDataHolder
+from my_demo.search.ArcModifyTag import ArcModifyTag
+from my_demo.search.DataHolder import DataHolder
+from my_demo.search.DataAnalyzer import DataAnalyzer
+from my_demo.search.Operator import Operator
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
 from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string
-from gurobipy import *
+from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
-
-class ModelSolver:
+class SearchSolver:
     heuristic_f = 'my_weight'
     heuristic = "dijkstra"
 
@@ -33,11 +35,14 @@ class ModelSolver:
     def __init__(self, config: Config):
         self.config = config
         self.meta_map = config.meta_map
-        self.data_holder = MipDataHolder()
+        self.data_holder = DataHolder()
 
         self.router = Router(heuristic=self.heuristic, CRS=self.meta_map["CRS"], CRS_map=self.meta_map["CRS_map"])
         self.load_basic_data()
         self.data_process()
+
+        self.analyzer = DataAnalyzer(self)
+        self.operator_factory = Operator(self)
 
     def load_basic_data(self):
         self.org_map_df = self.config.basic_network
@@ -55,17 +60,20 @@ class ModelSolver:
         self.df_path_foil = self.config.df_path_foil
 
     def data_process(self):
-        self.org_map_df_process()
+        self.process_org_map_df()
+        self.process_foil()
+        self.process_fact()
 
-    def org_map_df_process(self):
+        self.current_solution_map = deepcopy(self.org_map_df)
+
+    def process_org_map_df(self):
         self.org_map_df['org_obstacle_free_width_float'] = self.org_map_df['obstacle_free_width_float']
         self.org_map_df['org_curb_height_max'] = self.org_map_df['curb_height_max']
         self.handle_weight_without_preference(self.org_map_df)
 
         self.process_nodes()
         self.process_arcs()
-        self.process_foil()
-        self.process_fact()
+
         pass
 
     def process_nodes(self):
@@ -74,6 +82,7 @@ class ModelSolver:
         point_id_map = {pt: idx for idx, pt in enumerate(all_points)}
         self.data_holder.all_nodes = list(point_id_map.values())
         self.data_holder.point_id_map = point_id_map
+        self.data_holder.id_point_map = {v: k for k, v in point_id_map.items()}
 
         self.data_holder.start_node = self.data_holder.point_id_map.get(self.origin_node)
         self.data_holder.end_node = self.data_holder.point_id_map.get(self.dest_node)
@@ -81,7 +90,7 @@ class ModelSolver:
     def process_arcs(self):
         self.data_holder.M = self.org_map_df['c'].sum()
         self.org_map_df["arc"] = None  # 用来表示边id
-        self.org_map_df['modified'] = None  # 用来表示是否被修改过
+        self.org_map_df['modified'] = [[] for _ in range(len(self.org_map_df))]  # 用来表示是否被修改过
 
         for idx, row in self.org_map_df.iterrows():
             point1 = row['geometry'].coords[0]
@@ -147,6 +156,8 @@ class ModelSolver:
                                self.data_holder.point_id_map.get(x.coords[1]))
         fact_cost = 0
         self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
+        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.data_holder.start_node,
+                                                  self.data_holder.end_node)
         for idx, row in self.df_path_fact.iterrows():
             fact_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
         self.data_holder.fact_cost = fact_cost
@@ -219,171 +230,67 @@ class ModelSolver:
     def get_row_info_by_arc(self, i, j):
         return self.data_holder.row_data.get((i, j), self.data_holder.row_data.get((j, i), None))
 
-    def init_model(self):
-        self.model = Model('CRC25')
+    def modify_df_arc_with_attr(self, i, j, tag: ArcModifyTag, attr_name=None):
+        row = self.get_row_info_by_arc(i, j)
+        modified_list = []
 
-        self.x_pos = self.model.addVars(((k, i, j) for k in self.data_holder.all_feasible_arcs
-                                         for (i, j) in self.data_holder.all_feasible_arcs[k]), vtype=GRB.BINARY,
-                                        name="xPos_")
+        if tag == ArcModifyTag.TO_FE:
+            if not row['curb_height_max_include']:
+                row['curb_height_max'] = self.config.user_model["max_curb_height"]
+                modified_list.append(f"{tag.name}_curb_height_max")
+            if not row['obstacle_free_width_float_include']:
+                row['obstacle_free_width_float'] = self.config.user_model["min_sidewalk_width"]
+                modified_list.append(f"{tag.name}_obstacle_free_width_float")
 
-        self.x_neg = self.model.addVars(((k, i, j) for k in self.data_holder.all_infeasible_arcs
-                                         for (i, j) in self.data_holder.all_infeasible_arcs[k]), vtype=GRB.BINARY,
-                                        name="xNeg_")
+        elif tag == ArcModifyTag.TO_INFE:
+            if row['curb_height_max_include'] and row['obstacle_free_width_float_include']:
+                # 因为 改变这个属性没有限制 改变高度需要判断路径类型
+                row['obstacle_free_width_float'] = max(self.config.user_model["min_sidewalk_width"] - 1, 0)
+                modified_list.append(f"{tag.name}_obstacle_free_width_float")
 
-        self.x_p = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="xP_")
-        self.y = self.model.addVars(((i, j) for (i, j) in self.data_holder.all_arcs), vtype=GRB.BINARY, name="y_")
-        self.w = self.model.addVars(self.data_holder.all_nodes, vtype=GRB.CONTINUOUS, lb=0, name="w_")
-        big_m = self.data_holder.M * 4
+        elif tag == ArcModifyTag.CHANGE:
+            row["path_type"] = ("bike" if row["path_type"] == "walk" else "walk")
+            modified_list.append(f"{tag.name}_path_type")
 
-        # Arc Feasibility Constraints
-        for f, arcs in self.data_holder.all_feasible_arcs.items():
-            for i, j in arcs:
-                self.model.addConstr(self.y[i, j] <= 1 - self.x_pos[f, i, j],
-                                     name="arc_f_pos_[{},{},{}]".format(f, i, j))
+        if row['modified'] is None:
+            row['modified'] = modified_list
+        else:
+            row['modified'] = row['modified'] + modified_list
 
-        for f, arcs in self.data_holder.all_infeasible_arcs.items():
-            for i, j in arcs:
-                self.model.addConstr(self.y[i, j] <= self.x_neg[f, i, j], name="arc_f_neg_[{},{},{}]".format(f, i, j))
+        return row
+        # self.data_holder.row_data.update({(i, j): row})
+        # self.org_map_df.loc[row.name] = row
 
-        for i, j in self.data_holder.all_arcs:
-            # 仅在变量存在时才参与 quicksum
-            f_neg = quicksum(
-                self.x_neg[k, i, j]
-                for k in self.data_holder.all_infeasible_arcs
-                if (k, i, j) in self.x_neg
-            )
-            f_pos = quicksum(
-                (1 - self.x_pos[k, i, j])
-                for k in self.data_holder.all_feasible_arcs
-                if (k, i, j) in self.x_pos
-            )
-            self.model.addConstr(self.y[i, j] >= f_neg + f_pos - (len(self.eazy_name_map) - 1),
-                                 name="arc_f_multiple_[{},{}]".format(i, j))
-
-        # Undirected Arc Constraint
-        for f, arcs in self.data_holder.all_feasible_both_way.items():
-            for i, j in arcs:
-                self.model.addConstr(self.x_pos[f, i, j] == self.x_pos[f, j, i], name="ua_pos_[{},{}]".format(i, j))
-                # self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i], name="ua_neg_[{},{}]".format(i, j))
-                self.model.addConstr(self.x_p[i, j] == self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
-
-        for f, arcs in self.data_holder.all_infeasible_both_way.items():
-            for i, j in arcs:
-                self.model.addConstr(self.x_neg[f, i, j] == self.x_neg[f, j, i], name="ua_neg_[{},{}]".format(i, j))
-                # self.model.addConstr(self.x_pos[f, i, j] + self.x_pos[f, j, i] <= 1, name="ua_pos_[{},{}]".format(i, j))
-                self.model.addConstr(self.x_p[i, j] == self.x_p[j, i], name="ua_p_[{},{}]".format(i, j))
-                self.model.addConstr(self.y[i, j] == self.y[j, i], name="ua_y_[{},{}]".format(i, j))
-
-        # Shortest Path Constraints
-        for i, j in self.data_holder.all_arcs:
-            row_data = self.get_row_info_by_arc(i, j)
-
-            self.model.addConstr(
-                self.w[j] - self.w[i] <= row_data['c'] + row_data['d'] * self.x_p[i, j] + big_m * (1 - self.y[i, j]),
-                name="sp_opt_[{},{}]".format(i, j))
-
-        for i, j in self.data_holder.foil_route_arcs:
-            row_data = self.get_row_info_by_arc(i, j)
-
-            self.model.addConstr(
-                self.w[j] - self.w[i] >= row_data['c'] + row_data['d'] * self.x_p[i, j] - big_m * (1 - self.y[i, j]),
-                name="sp_foil_[{},{}]".format(i, j))
-
-            self.model.addConstr(self.y[i, j] == 1, "foil_y_[{},{}]".format(i, j))
-
-        # self.model.addConstr(self.w[self.data_holder.start_node] == 0, "w_start")
-        # self.model.addConstr(self.w[self.data_holder.end_node] == self.data_holder.foil_cost, "w_end")
-        # todo 会让一些无关紧要的变量也赋值
-        # x_pos_sum = quicksum((self.x_pos[k, i, j] for k in self.data_holder.all_feasible_arcs
-        #                       for (i, j) in self.data_holder.all_feasible_arcs[k]))
-        # x_neg_sum = quicksum((self.x_neg[k, i, j] for k in self.data_holder.all_infeasible_arcs
-        #                       for (i, j) in self.data_holder.all_infeasible_arcs[k]))
-        # x_p_sum = self.x_p.sum()
-        # self.model.setObjective(x_pos_sum + x_neg_sum + x_p_sum, GRB.MINIMIZE)
-        self.model.setObjective(self.x_pos.sum() + self.x_neg.sum() + self.x_p.sum(),
-                                GRB.MINIMIZE)
-
-    def solve_model(self, time_limit=3600, gap=0.01):
-        self.model.setParam(GRB.Param.MIPGap, gap)
-        self.model.setParam(GRB.Param.TimeLimit, time_limit)
-        self.model.update()
-        # debug
-        # self.model.write("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/CRC25.lp")
-        self.model.optimize()
-
-        if self.model.status == 3 or self.model.status == 4 or self.model.status == 5:
-            self.print_infeasible(self.model)
+    def do_solve(self):
+        self.analyzer.do_analyze()
+        self.operator_factory.do_must_be_feasible()
+        self.operator_factory.do_must_be_infeasible_arcs()
+        pass
 
     def process_solution_from_model(self):
-        self.modify_org_map_df_by_solution()
         self.get_best_route_df_from_solution()
-        self.data_holder.final_weight = self.org_map_df.set_index("arc").to_dict()['my_weight']
-        self.fill_w_value_for_visual()
-
-    def fill_w_value_for_visual(self):
-        self.org_map_df['w_i'] = 0
-        self.org_map_df['w_j'] = 0
-        self.org_map_df['y_ij'] = 0
-        for idx, row in self.org_map_df.iterrows():
-            arc = row['arc']
-            self.org_map_df.at[row.name, "w_i"] = self.w[arc[0]].X
-            self.org_map_df.at[row.name, "w_j"] = self.w[arc[1]].X
-            self.org_map_df.at[row.name, "y_ij"] = self.y[arc].X
-        self.df_path_foil['w_i'] = 0
-        self.df_path_foil['w_j'] = 0
-        self.df_path_foil['y_ij'] = 0
-        for idx, row in self.df_path_foil.iterrows():
-            arc = row['arc']
-            self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]].X
-            self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]].X
-            self.df_path_foil.at[row.name, "y_ij"] = self.y[arc].X
+        self.calc_error()
 
     def get_best_route_df_from_solution(self):
-        self.org_map_df = handle_weight_with_recovery(self.org_map_df, self.config.user_model)
+        self.current_solution_map = handle_weight_with_recovery(self.current_solution_map, self.config.user_model)
 
-        _, best_graph = create_network_graph(self.org_map_df)
+        _, best_graph = create_network_graph(self.current_solution_map)
 
         origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
         _, _, self.df_best_route = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
         self.df_best_route = correct_arc_direction(self.df_best_route, self.data_holder.start_node,
                                                    self.data_holder.end_node)
         pass
+    def calc_error(self):
+        sub_op_list = get_virtual_op_list(self.org_map_df, self.current_solution_map, self.config.user_model["attrs_variable_names"])
+        graph_error = len([op for op in sub_op_list if op[3] == "success"])
 
-    def modify_org_map_df_by_solution(self):
+        route_error = 1 - common_edges_similarity_route_df_weighted(self.df_best_route, self.df_path_foil,
+                                                                    self.config.user_model["attrs_variable_names"])
 
-        modify_dict = defaultdict(list)
-        self.graph_error = 0
-        for (f, i, j), value in self.x_pos.items():
-            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(i, j, "to_infe", attr_name)
-
-                self.graph_error += 1
-                modify_dict[(f, i, j)].append(attr_name)
-
-        for (f, i, j), value in self.x_neg.items():
-            if ((f, i, j) in modify_dict) or ((f, j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                attr_name = self.eazy_name_map_reversed.get(f)
-                self.modify_df_arc_with_attr(i, j, "to_fe", attr_name)
-
-                self.graph_error += 1
-                modify_dict[(f, i, j)].append(attr_name)
-
-        for (i, j), value in self.x_p.items():
-            if ((i, j) in modify_dict) or ((j, i) in modify_dict):
-                continue
-            if value.X > 0.99:
-                self.modify_df_arc_with_attr(i, j, "change", "path_type")
-
-                self.graph_error += 1
-                modify_dict[(i, j)].append("path_type")
-
-        pass
+        self.data_holder.visual_detail_info['graph_error'] = graph_error
+        self.data_holder.visual_detail_info['route_error'] = route_error
+        self.data_holder.visual_detail_info['route_error_threshold'] = self.config.user_model["route_error_threshold"]
 
     def process_visual_data(self) -> dict:
 
@@ -394,42 +301,7 @@ class ModelSolver:
                 "df_path_fact": self.df_path_fact,
                 "df_path_foil": self.df_path_foil,
                 "best_route": self.df_best_route,
-                "org_map_df": self.org_map_df,
+                "org_map_df": self.current_solution_map,
                 "config": self.config,
                 "data_holder": self.data_holder,
                 "show_data": self.data_holder.visual_detail_info}
-
-    def modify_df_arc_with_attr(self, i, j, tag, attr_name):
-        row = self.get_row_info_by_arc(i, j)
-
-        if attr_name == "curb_height_max":
-            if tag == "to_fe":
-                # 需要修改高度
-                row[attr_name] = self.config.user_model["max_curb_height"]
-            elif tag == "to_infe":
-                row[attr_name] = self.config.user_model["max_curb_height"] + 1
-        elif attr_name == "obstacle_free_width_float":
-            if tag == "to_fe":
-                row[attr_name] = self.config.user_model["min_sidewalk_width"]
-            elif tag == "to_infe":
-                row[attr_name] = max(self.config.user_model["min_sidewalk_width"] - 1, 0)
-        elif attr_name == "path_type":
-            row[attr_name] = ("bike" if row[attr_name] == "walk" else "walk")
-
-        if row['modified'] is None:
-            row['modified'] = [f"{tag}_{attr_name}"]
-        else:
-            row['modified'].append(f"{tag}_{attr_name}")
-
-        self.data_holder.row_data.update({(i, j): row})
-        self.org_map_df.loc[row.name] = row
-
-    def print_infeasible(self, model):
-        model.computeIIS()
-        infeasible_list = []
-        for cons in model.getConstrs():
-            if cons.IISConstr:
-                print(cons.constrName)
-                infeasible_list.append(cons.constrName)
-        model.write('model.ilp')
-        return infeasible_list
