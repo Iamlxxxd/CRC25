@@ -315,8 +315,10 @@ class ModelSolver:
         if self.model.status == 3 or self.model.status == 4 or self.model.status == 5:
             self.print_infeasible(self.model)
 
-    def process_solution_from_model(self):
-        self.modify_org_map_df_by_solution()
+    def process_solution_from_model(self, exclude_arcs=None):
+        if exclude_arcs is None:
+            exclude_arcs = []
+        self.modify_org_map_df_by_solution(exclude_arcs)
         self.get_best_route_df_from_solution()
         self.data_holder.final_weight = self.org_map_df.set_index("arc").to_dict()['my_weight']
         self.fill_w_value_for_visual()

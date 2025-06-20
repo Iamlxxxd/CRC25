@@ -5,15 +5,18 @@
 @time   :    2025/6/6 10:20
 @project:    CRC25
 """
+import copy
 import os
 import random
 import sys
 import pickle
 
 import numpy as np
+import pandas as pd
 import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
+from my_demo.mip.MipDataHolder import MipDataHolder
 from my_demo.mip.MipModelSolver import ModelSolver
 from my_demo.mip.MipModelSolverNew import ModelSolverNew
 import gc
@@ -104,6 +107,9 @@ def single_main():
     # solver = ModelSolver(config)
     solver.init_model()
     solver.solve_model()
+    with open(f'{base_dir}/solver.pk', 'wb') as file:
+        pickle.dump([solver,config], file, protocol=pickle.HIGHEST_PROTOCOL)
+    # solver_copy = deep_copy_serialization(solver)
     solver.process_solution_from_model()
 
     visual_data = solver.process_visual_data()
@@ -114,7 +120,64 @@ def single_main():
 
     # visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"),config.route_name)
+    varify_df = modify_recovery_varify(solver,config,base_dir)
+    varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
     print("DONE")
+
+def modify_recovery_varify(solver_modified,config, base_dir):
+    # 修改后的arc
+    modified_map = solver_modified.org_map_df
+    modified_arc = modified_map[modified_map['modified'].str.len().gt(0)]
+    modified_arc_list = modified_arc['arc'].tolist()
+    # 修改后的最优路由
+    modified_best_route = solver_modified.df_best_route
+    dist_diff_list = []
+    arc_diff_mod_count_list = []
+    arc_diff_rec_count_list = []
+    conclusion_list = []
+    for rec_arc in modified_arc_list:
+        # solver_rec = deep_copy_serialization(solver_copy)
+
+        with open(f'{base_dir}/solver.pk', 'rb') as file:
+            solver_rec,config = pickle.load(file)
+        # 重新初始化data_holder
+        # data_holder中的数据都是静态属性,需要重新赋值
+        solver_rec.data_holder.reset_data()
+        solver_rec.load_basic_data()
+        solver_rec.data_process()
+
+        solver_rec.process_solution_from_model([rec_arc])
+        visual_data = solver_rec.process_visual_data()
+        visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"), config.route_name+f'_rec_{rec_arc}',[rec_arc])
+        recovery_best_route = solver_rec.df_best_route
+        # 对比best route
+        dist_diff = modified_best_route['w_j'].max() - recovery_best_route['w_j'].max()
+        arc_diff_mod_count = len(set(modified_best_route['arc'])-set(recovery_best_route['arc']))
+        arc_diff_rec_count = len(set(recovery_best_route['arc'])-set(modified_best_route['arc']))
+        if arc_diff_mod_count == 0 and arc_diff_rec_count == 0:
+            conclusion = '无效修改'
+            print(f'修改边{rec_arc}是无效操作,不影响最短路')
+        else:
+            conclusion = '有效修改'
+            print(f'修改边{rec_arc}影响{arc_diff_mod_count+arc_diff_rec_count}条边')
+        dist_diff_list.append(dist_diff)
+        arc_diff_mod_count_list.append(arc_diff_mod_count)
+        arc_diff_rec_count_list.append(arc_diff_rec_count)
+        conclusion_list.append(conclusion)
+    # 结论df
+    conclusion_df = pd.DataFrame({
+        'arc':modified_arc_list,
+        'modified':modified_arc['modified'],
+        'dist_diff':dist_diff_list,
+        'arc_diff_mod_count':arc_diff_mod_count_list,
+        'arc_diff_rec_count':arc_diff_rec_count_list,
+        'conclusion':conclusion_list
+    })
+    return conclusion_df
+
+def deep_copy_serialization(obj):
+    return pickle.loads(pickle.dumps(obj))
+
 if __name__ == "__main__":
     # profiler = Profiler()
     # profiler.start()

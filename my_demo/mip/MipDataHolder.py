@@ -27,3 +27,18 @@ class MipDataHolder:
 
     def __init__(self):
         pass
+    def reset_data(self):
+        MipDataHolder.all_nodes = []
+        MipDataHolder.features = ["curb_height_max", "obstacle_free_width_float"]
+        MipDataHolder.point_id_map = dict()
+        MipDataHolder.all_arcs = []
+        MipDataHolder.foil_route_arcs = []
+        MipDataHolder.row_data = dict()
+        MipDataHolder.all_feasible_arcs = defaultdict(list)
+        MipDataHolder.all_infeasible_arcs = defaultdict(list)
+        MipDataHolder.all_feasible_both_way = defaultdict(list)
+        MipDataHolder.all_infeasible_both_way = defaultdict(list)
+        MipDataHolder.all_feasible_dir_arcs = defaultdict(list)
+        MipDataHolder.all_infeasible_dir_arcs = defaultdict(list)
+        MipDataHolder.M:float
+        MipDataHolder.visual_detail_info=dict()

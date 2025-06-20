@@ -168,7 +168,7 @@ def visual_map_explore(visual_dict: dict,file_path):
     return m
 
 
-def visual_map_foil_modded(visual_dict: dict, file_path,tag):
+def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
     import geopandas as gpd
     import branca
     import folium
@@ -241,7 +241,16 @@ def visual_map_foil_modded(visual_dict: dict, file_path,tag):
             legend=False,
             layer_kwds={"show": True, "overlay": True, "control": True, "group": "modded not in foil"}
         )
-
+    if not rec_arcs is None:
+        recovery_edges = org_map_df[org_map_df['arc'].isin(rec_arcs)]
+        m = recovery_edges.explore(
+            m=m,
+            color="purple",
+            style_kwds=dict(weight=7),
+            name="recovery edge",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "modded not in foil"}
+        )
     # ----------- 图层4：Foil Route（交替黑/橙/红） -----------
     foil_edges = org_map_df[org_map_df['in_foil']].sort_values(by='arc', key=lambda x: x.map(arc2idx))
     foil_edges = foil_edges.copy()

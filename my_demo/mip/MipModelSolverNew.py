@@ -78,12 +78,16 @@ class ModelSolverNew(ModelSolver):
         solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
                                  logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
-    def modify_org_map_df_by_solution(self):
+    def modify_org_map_df_by_solution(self, exclude_arcs=None):
+        if exclude_arcs is None:
+            exclude_arcs = []
         # todo unfinished
         feature_modify_mark = set()
         self.graph_error = 0
         for i, j_dict in self.y.items():
             for j, value in j_dict.items():
+                if (i, j) in exclude_arcs or (j, i) in exclude_arcs:
+                    continue
                 if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
                     continue
                 if value.varValue > 0.99:
@@ -95,6 +99,8 @@ class ModelSolverNew(ModelSolver):
         type_modify_mark = set()
         for i, j_dict in self.x.items():
             for j, value in j_dict.items():
+                if (i, j) in exclude_arcs or (j, i) in exclude_arcs:
+                    continue
                 if (i, j) in type_modify_mark or (j, i) in type_modify_mark:
                     continue
                 if value.varValue > 0.99:
