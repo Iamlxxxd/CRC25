@@ -34,7 +34,7 @@ class DataHolder:
     fact_common_from_node_arcs = dict()
     fact_common_to_node_arcs = dict()
 
-
+    foil_fact_fork_merge_nodes = dict()
     def __init__(self):
         pass
 

@@ -21,7 +21,7 @@ import concurrent.futures
 
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
-from visual import visual_line, visual_map, visual_map_explore, visual_map_foil_modded
+from visual import visual_line, visual_map, visual_map_foil_modded
 
 
 # from  utils.common_utils import set_seed
@@ -47,7 +47,7 @@ def single_main():
 
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
-
+    config.out_path = os.path.join(base_dir, "my_demo", "output", "search_test")
     solver = SearchSolver(config)
     solver.do_solve()
 
@@ -59,7 +59,7 @@ def single_main():
     # with open(visual_pkl_path, "wb") as f:
     #     pickle.dump(visual_data, f)
 
-    visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "search_test"),
+    visual_map_foil_modded(visual_data, config.out_path,
                            config.route_name)
     print("DONE")
 

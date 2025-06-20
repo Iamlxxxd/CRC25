@@ -20,10 +20,14 @@ from my_demo.search.ArcModifyTag import ArcModifyTag
 from my_demo.search.DataHolder import DataHolder
 from my_demo.search.DataAnalyzer import DataAnalyzer
 from my_demo.search.Operator import Operator
+from my_demo.search.SubProblem import SubProblem
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
 from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
+from my_demo.visual import visual_sub_problem
+import itertools
+
 
 class SearchSolver:
     heuristic_f = 'my_weight'
@@ -262,12 +266,24 @@ class SearchSolver:
         # self.org_map_df.loc[row.name] = row
 
     def do_solve(self):
-        self.analyzer.do_analyze()
-        self.operator_factory.do_must_be_feasible()
-        self.operator_factory.do_must_be_infeasible_arcs()
+        self.analyzer.do_basic_analyze()
+        # 这里把foil的不可行变成可行 存到了current_solution_map里
+        self.operator_factory.do_foil_must_be_feasible()
+        sub_problem_list = []
+        counter = itertools.count(start=0, step=1)
+        self.solutions = []
+        for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
+            sub_problem = SubProblem(self, info, self.current_solution_map, None, counter)
+            sub_solution = sub_problem.do_solve()
+            self.solutions.extend(sub_solution)
+
+        # self.operator_factory.do_must_be_infeasible_arcs()
         pass
 
     def process_solution_from_model(self):
+        for sub_problem in self.solutions:
+            for row in sub_problem.modified_row:
+                self.current_solution_map.loc[row.name] = row
         self.get_best_route_df_from_solution()
         self.calc_error()
 
@@ -281,8 +297,10 @@ class SearchSolver:
         self.df_best_route = correct_arc_direction(self.df_best_route, self.data_holder.start_node,
                                                    self.data_holder.end_node)
         pass
+
     def calc_error(self):
-        sub_op_list = get_virtual_op_list(self.org_map_df, self.current_solution_map, self.config.user_model["attrs_variable_names"])
+        sub_op_list = get_virtual_op_list(self.org_map_df, self.current_solution_map,
+                                          self.config.user_model["attrs_variable_names"])
         graph_error = len([op for op in sub_op_list if op[3] == "success"])
 
         route_error = 1 - common_edges_similarity_route_df_weighted(self.df_best_route, self.df_path_foil,

@@ -13,7 +13,7 @@ class Operator:
         self.solver = solver
         self.data_holder = self.solver.data_holder
 
-    def do_must_be_feasible(self):
+    def do_foil_must_be_feasible(self):
         for i, j in self.data_holder.foil_must_feasible_arcs:
             modified_row = self.solver.modify_df_arc_with_attr(i, j, ArcModifyTag.TO_FE)
             solution_row = self.solver.current_solution_map.loc[modified_row.name]
@@ -35,3 +35,12 @@ class Operator:
                 solution_row = self.solver.current_solution_map.loc[modified_row.name]
                 modified_row['modified'] = modified_row['modified'] + solution_row['modified']
                 self.solver.current_solution_map.loc[modified_row.name] = modified_row
+
+    def make_infeasible_tail_arcs(self, problem):
+        i, j = problem.sub_fact[-2], problem.sub_fact[-1]
+        modified_row = self.solver.modify_df_arc_with_attr(i, j, ArcModifyTag.TO_INFE)
+        solution_row = problem.map_df.loc[modified_row.name]
+        modified_row['modified'] = modified_row['modified'] + solution_row['modified']
+        problem.map_df.loc[modified_row.name] = modified_row
+
+        return modified_row
