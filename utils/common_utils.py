@@ -9,12 +9,15 @@ import os
 import random
 import numpy as np
 import pandas as pd
+
+
 def set_seed(seed=7):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
     random.seed(seed)
 
     np.random.seed(seed)
+
 
 def ensure_crs(gdf, crs):
     if gdf.crs is None:
@@ -25,6 +28,7 @@ def ensure_crs(gdf, crs):
 
 
 import gurobipy as gp
+
 
 def get_constraint_string(model, constr_name):
     """
@@ -71,6 +75,7 @@ def get_constraint_string(model, constr_name):
 
 import geopandas as gpd
 
+
 def correct_arc_direction(gdf, start_node, end_node):
     # Step 1: 构建邻接字典
     from collections import defaultdict, deque
@@ -111,3 +116,13 @@ def correct_arc_direction(gdf, start_node, end_node):
 
     # Step 4: 返回新的 GeoDataFrame（只保留路径部分）
     return gpd.GeoDataFrame(new_rows, columns=gdf.columns, crs=gdf.crs)
+
+
+def extract_nodes(df):
+    nodes = []
+    for idx, row in df.iterrows():
+        i, j = row['arc']
+        if not nodes:
+            nodes.append(i)
+        nodes.append(j)
+    return nodes

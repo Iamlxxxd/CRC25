@@ -21,7 +21,7 @@ from my_demo.visual import visual_sub_problem,visual_map_foil_modded
 
 
 class SubProblem:
-    def __init__(self, solver, info_tuple, map_df, master, idx_gen):
+    def __init__(self, solver, info_tuple, map_df, map_graph,master, idx_gen):
 
         self.idx_gen = idx_gen
         self.idx = next(idx_gen)
@@ -37,7 +37,8 @@ class SubProblem:
         self.sub_foil = info_tuple['foil_sub_path']
 
         self.map_df = deepcopy(map_df)
-
+        #todo 暂时没操作图 先不deepcopy
+        self.map_graph = map_graph
         self.modified_row = []
         self.master = master
 
@@ -49,7 +50,7 @@ class SubProblem:
     def calc_sub_best(self):
         self.weight_df = handle_weight_with_recovery(self.map_df, self.config.user_model)
 
-        _, self.org_graph = create_network_graph(self.weight_df)
+        _, self.new_graph = create_network_graph(self.weight_df)
 
         self.fork_lc = self.org_solver.data_holder.id_point_map.get(self.fork)
         self.merge_lc = self.org_solver.data_holder.id_point_map.get(self.merge)
@@ -57,7 +58,7 @@ class SubProblem:
         #     origin_lc,
         #     dest_lc,
         #     self.org_graph)
-        self.path_best, self.G_path_best, self.df_path_best = self.org_solver.router.get_route(self.org_graph,
+        self.path_best, self.G_path_best, self.df_path_best = self.org_solver.router.get_route(self.new_graph,
                                                                                                self.fork_lc,
                                                                                                self.merge_lc,
                                                                                                self.org_solver.heuristic_f)
@@ -73,6 +74,7 @@ class SubProblem:
             path_fact.append(row)
 
         self.df_path_fact = gpd.GeoDataFrame(path_fact, crs=self.map_df.crs)
+        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.fork, self.merge)
 
     def process_sub_foil(self):
         nodes = self.info_tuple['foil_sub_path']
@@ -96,7 +98,7 @@ class SubProblem:
 
     def process_visual_data(self):
         self.data_holder.visual_detail_info['fork'] = f"{self.fork}_{self.fork_lc}"
-        self.data_holder.visual_detail_info['merge'] = f"{self.merge_lc}_{self.merge_lc}"
+        self.data_holder.visual_detail_info['merge'] = f"{self.merge}_{self.merge_lc}"
 
         return {
                 "meta_map": self.config.meta_map,
@@ -113,9 +115,13 @@ class SubProblem:
         self.process_sub_fact()
 
         # todo local search  当前这个不行
-        modified_row = self.org_solver.operator_factory.make_infeasible_tail_arcs(self)
-        self.calc_sub_best()
+        # modified_row = self.org_solver.operator_factory.make_infeasible_tail_arcs(self)
+        #todo 这个减少了分支数量
+        modified_row = self.org_solver.operator_factory.change_by_graph_feature(self)
+
         self.modified_row.append(modified_row)
+
+        self.calc_sub_best()
         route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
                                                                     self.config.user_model["attrs_variable_names"])
         master_id = self.master.idx if self.master != None else "N"
@@ -130,7 +136,7 @@ class SubProblem:
         self.org_solver.analyzer.find_sub_forks_and_merges_node(self.df_path_foil, self.df_path_best, self.data_holder)
         for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
             # todo 这里不可能不命中，至少起点和终点是一样的
-            sub_problem = SubProblem(self.org_solver, info, self.map_df, self,self.idx_gen)
+            sub_problem = SubProblem(self.org_solver, info, self.map_df,self.new_graph, self,self.idx_gen)
             sub_solution = sub_problem.do_solve()
             solutions.extend(sub_solution)
 
