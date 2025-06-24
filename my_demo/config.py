@@ -14,6 +14,7 @@ class Config:
         self.paths = config['paths']
         self.base_dir = base_dir
         self.route_name = self.paths['route_name']
+        self.show_sub_problem = config['params'].get('show_sub_problem', False)
         self.load_all()
 
     def _full_path(self, *paths):

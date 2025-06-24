@@ -34,7 +34,7 @@ def set_seed(seed=7):
     np.random.seed(seed)
 
 
-def single_main():
+def single_main(route_name=None):
     set_seed()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +44,10 @@ def single_main():
 
     base_dir = os.path.join(current_dir, "..")
     base_dir = os.path.abspath(base_dir)
+
+    # 设置地图名
+    if route_name is not None:
+        config['paths']['route_name'] = route_name
 
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
@@ -59,15 +63,32 @@ def single_main():
     # with open(visual_pkl_path, "wb") as f:
     #     pickle.dump(visual_data, f)
 
-    visual_map_foil_modded(visual_data, config.out_path,
-                           config.route_name)
-    print("DONE")
+    visual_map_foil_modded(visual_data, config.out_path, config.route_name)
+    print(f"{route_name or config.route_name} DONE")
 
+def batch_main():
+    set_seed()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.join(current_dir, "..")
+    base_dir = os.path.abspath(base_dir)
+    routes_dir = os.path.join(base_dir, "data", "train", "routes")
+    output_dir = os.path.join(base_dir, "my_demo", "output", "search_test")
+    os.makedirs(output_dir, exist_ok=True)
+    route_names = [d for d in os.listdir(routes_dir) if os.path.isdir(os.path.join(routes_dir, d))]
+
+    for route_name in route_names:
+        try:
+            print(f"{route_name} START")
+            single_main(route_name)
+        except Exception as e:
+            print(f"Route {route_name} ERROR: {e}")
+    print("ALL DONE")
 
 if __name__ == "__main__":
-    # profiler = Profiler()
-    # profiler.start()
+    profiler = Profiler()
+    profiler.start()
     # batch_main()
     single_main()
-    # profiler.stop()
-    # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
+    profiler.stop()
+    profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)

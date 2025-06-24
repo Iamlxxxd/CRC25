@@ -17,14 +17,16 @@ import pandas as pd
 import networkx as nx
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 from utils.common_utils import correct_arc_direction
-from my_demo.visual import visual_sub_problem,visual_map_foil_modded
+from my_demo.visual import visual_sub_problem, visual_map_foil_modded
 
 
 class SubProblem:
-    def __init__(self, solver, info_tuple, map_df, map_graph,master, idx_gen):
+    def __init__(self, solver, info_tuple, map_df, map_graph, master, idx_gen, level):
 
         self.idx_gen = idx_gen
         self.idx = next(idx_gen)
+        self.level = level
+
         self.org_solver = solver
         self.config = solver.config
         self.data_holder = DataHolder()
@@ -37,7 +39,7 @@ class SubProblem:
         self.sub_foil = info_tuple['foil_sub_path']
 
         self.map_df = deepcopy(map_df)
-        #todo 暂时没操作图 先不deepcopy
+        # todo 暂时没操作图 先不deepcopy
         self.map_graph = map_graph
         self.modified_row = []
         self.master = master
@@ -101,14 +103,23 @@ class SubProblem:
         self.data_holder.visual_detail_info['merge'] = f"{self.merge}_{self.merge_lc}"
 
         return {
-                "meta_map": self.config.meta_map,
-                "df_path_fact": self.df_path_fact,
-                "df_path_foil": self.df_path_foil,
-                "best_route": self.df_path_best,
-                "org_map_df": self.map_df,
-                "config": self.config,
-                "data_holder": self.data_holder,
-                "show_data": self.data_holder.visual_detail_info}
+            "meta_map": self.config.meta_map,
+            "df_path_fact": self.df_path_fact,
+            "df_path_foil": self.df_path_foil,
+            "best_route": self.df_path_best,
+            "org_map_df": self.map_df,
+            "config": self.config,
+            "data_holder": self.data_holder,
+            "show_data": self.data_holder.visual_detail_info}
+
+    def visualize_if_needed(self, tag):
+        if getattr(self.config, "show_sub_problem", False):
+            master_id = self.master.idx if self.master is not None else "N"
+            visual_map_foil_modded(
+                self.process_visual_data(),
+                self.config.out_path,
+                f"{master_id}|{self}##{tag}##{self.config.route_name}"
+            )
 
     def do_solve(self):
         self.process_sub_foil()
@@ -116,29 +127,56 @@ class SubProblem:
 
         # todo local search  当前这个不行
         # modified_row = self.org_solver.operator_factory.make_infeasible_tail_arcs(self)
-        #todo 这个减少了分支数量
-        modified_row = self.org_solver.operator_factory.change_by_graph_feature(self)
+        # todo 这个减少了分支数量
+        if self.idx > 0:
+            # 根节点一定是失败的 而且没有识别过分叉 这里不需要操作根节点
+            modified_row = self.org_solver.operator_factory.change_by_graph_feature(self)
 
-        self.modified_row.append(modified_row)
+            self.modified_row.append(modified_row)
 
         self.calc_sub_best()
         route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
                                                                     self.config.user_model["attrs_variable_names"])
         master_id = self.master.idx if self.master != None else "N"
-        # 子问题解决
-        if route_error <= 0:
 
-            visual_map_foil_modded(self.process_visual_data(), self.config.out_path, f"{master_id}|{self}##SUC##{self.config.route_name}")
+        if route_error <= 0:
+            # 子问题解决
+            self.visualize_if_needed("SUC")
             return [self]
 
-        visual_map_foil_modded(self.process_visual_data(), self.config.out_path, f"{master_id}|{self}##FAIL##{self.config.route_name}")
-        solutions = []
-        self.org_solver.analyzer.find_sub_forks_and_merges_node(self.df_path_foil, self.df_path_best, self.data_holder)
-        for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
-            # todo 这里不可能不命中，至少起点和终点是一样的
-            sub_problem = SubProblem(self.org_solver, info, self.map_df,self.new_graph, self,self.idx_gen)
-            sub_solution = sub_problem.do_solve()
-            solutions.extend(sub_solution)
+        while True:
+            solutions = []
+            self.org_solver.analyzer.find_sub_forks_and_merges_node(self.df_path_foil, self.df_path_best,
+                                                                    self.data_holder)
+            for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
+                # todo 这里不可能不命中，至少起点和终点是一样的
+                sub_problem = SubProblem(self.org_solver, info, self.map_df, self.new_graph, self, self.idx_gen,
+                                         self.level + 1)
+                sub_solution = sub_problem.do_solve()
+                solutions.extend(sub_solution)
 
-        solutions.append(self)
+            # 2. 合并子节点结果
+            for s in solutions:
+                for row in s.modified_row:
+                    self.modified_row.append(row)
+                    self.map_df.loc[row.name] = row
+
+            # 3. 重新计算自身
+            self.calc_sub_best()
+            route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
+                                                                        self.config.user_model["attrs_variable_names"])
+
+            if route_error <= 0:
+                tag = "R#SUC"
+                if self.idx == 0:
+                    tag = "ROOT#SUC#"
+                # 子问题解决
+                self.visualize_if_needed(tag)
+                return [self]
+
+            # 子问题未解决
+            self.visualize_if_needed("FAIL")
+            if self.idx_gen.peek() > 50 or self.level > 20:
+                # 探索节点过多 或者深度过多
+                break
         return solutions

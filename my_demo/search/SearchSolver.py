@@ -26,7 +26,7 @@ from utils.dataparser import create_network_graph, handle_weight, handle_weight_
 from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string, extract_nodes
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 from my_demo.visual import visual_sub_problem, visual_map_foil_modded
-import itertools
+from my_demo.search.TrackedCounter import TrackedCounter
 
 
 class SearchSolver:
@@ -272,13 +272,25 @@ class SearchSolver:
         self.analyzer.do_basic_analyze()
         # 这里把foil的不可行变成可行 存到了current_solution_map里
         self.operator_factory.do_foil_must_be_feasible()
-        sub_problem_list = []
-        counter = itertools.count(start=0, step=1)
-        self.solutions = []
-        for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
-            sub_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
-            sub_solution = sub_problem.do_solve()
-            self.solutions.extend(sub_solution)
+
+        self.get_best_route_df_from_solution()
+        route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
+                                                                    self.config.user_model["attrs_variable_names"])
+        if route_error <= 0:
+            # 说明这张图只要把foil从不可行变成可行即可
+            return
+
+        counter = TrackedCounter(start=0, step=1)
+
+        root_info = self.process_data_for_root_problem()
+        root_problem = SubProblem(self, root_info, self.current_solution_map, self.new_graph, None, counter,0)
+        self.solutions = root_problem.do_solve()
+
+        # self.solutions = []
+        # for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
+        #     sub_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
+        #     sub_solution = sub_problem.do_solve()
+        #     self.solutions.extend(sub_solution)
 
         # self.operator_factory.do_must_be_infeasible_arcs()
         pass
@@ -293,10 +305,10 @@ class SearchSolver:
     def get_best_route_df_from_solution(self):
         self.current_solution_map = handle_weight_with_recovery(self.current_solution_map, self.config.user_model)
 
-        _, best_graph = create_network_graph(self.current_solution_map)
+        _, self.new_graph = create_network_graph(self.current_solution_map)
 
-        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
-        _, _, self.df_path_best = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
+        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(self.new_graph, self.config.gdf_coords_loaded)
+        _, _, self.df_path_best = self.router.get_route(self.new_graph, origin_node, dest_node, self.heuristic_f)
         self.df_path_best = correct_arc_direction(self.df_path_best, self.data_holder.start_node,
                                                   self.data_holder.end_node)
         pass
@@ -314,18 +326,18 @@ class SearchSolver:
         self.data_holder.visual_detail_info['route_error_threshold'] = self.config.user_model["route_error_threshold"]
 
     def process_data_for_root_problem(self):
-        #todo 把根节点当子问题 方便递归修正 未完成
+        # todo 把根节点当子问题 方便递归修正 未完成
         fork = self.data_holder.start_node
         merge = self.data_holder.end_node
         foil_sub_path = extract_nodes(self.df_path_foil)
-        fac_sub_path = extract_nodes(self.df_path_best)
+        fact_sub_path = extract_nodes(self.df_path_best)
 
         # info = self.process_data_for_root_problem()
         # root_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
         return {'fork': fork,
                 'merge': merge,
                 'foil_sub_path': foil_sub_path,
-                'fac_sub_path': fac_sub_path}
+                'fact_sub_path': fact_sub_path}
 
     def process_visual_data(self) -> dict:
 
