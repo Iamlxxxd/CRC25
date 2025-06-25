@@ -59,6 +59,10 @@ class SearchSolver:
         self.origin_node, self.dest_node, self.origin_node_loc, self.dest_node_loc, _ = self.router.set_o_d_coords(
             self.org_graph,
             self.config.gdf_coords_loaded)
+
+        self.data_holder.start_node_lc = self.origin_node
+        self.data_holder.end_node_lc = self.dest_node
+
         self.path_fact, self.G_path_fact, self.df_path_fact = self.router.get_route(self.org_graph, self.origin_node,
                                                                                     self.dest_node, self.heuristic_f)
         self.df_path_foil = self.config.df_path_foil
@@ -88,8 +92,8 @@ class SearchSolver:
         self.data_holder.point_id_map = point_id_map
         self.data_holder.id_point_map = {v: k for k, v in point_id_map.items()}
 
-        self.data_holder.start_node = self.data_holder.point_id_map.get(self.origin_node)
-        self.data_holder.end_node = self.data_holder.point_id_map.get(self.dest_node)
+        self.data_holder.start_node_id = self.data_holder.point_id_map.get(self.origin_node)
+        self.data_holder.end_node_id = self.data_holder.point_id_map.get(self.dest_node)
 
     def process_arcs(self):
         self.data_holder.M = self.org_map_df['c'].sum()
@@ -145,8 +149,8 @@ class SearchSolver:
         get_nodes = lambda x: (self.data_holder.point_id_map.get(x.coords[0]),
                                self.data_holder.point_id_map.get(x.coords[1]))
         self.df_path_foil['arc'] = self.df_path_foil['geometry'].apply(get_nodes)
-        self.df_path_foil = correct_arc_direction(self.df_path_foil, self.data_holder.start_node,
-                                                  self.data_holder.end_node)
+        self.df_path_foil = correct_arc_direction(self.df_path_foil, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         # self.df_path_foil.sort_values(by=['arc'], inplace=True)
 
         foil_cost = 0
@@ -160,8 +164,8 @@ class SearchSolver:
                                self.data_holder.point_id_map.get(x.coords[1]))
         fact_cost = 0
         self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
-        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.data_holder.start_node,
-                                                  self.data_holder.end_node)
+        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         for idx, row in self.df_path_fact.iterrows():
             fact_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
         self.data_holder.fact_cost = fact_cost
@@ -309,8 +313,8 @@ class SearchSolver:
 
         origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(self.new_graph, self.config.gdf_coords_loaded)
         _, _, self.df_path_best = self.router.get_route(self.new_graph, origin_node, dest_node, self.heuristic_f)
-        self.df_path_best = correct_arc_direction(self.df_path_best, self.data_holder.start_node,
-                                                  self.data_holder.end_node)
+        self.df_path_best = correct_arc_direction(self.df_path_best, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         pass
 
     def calc_error(self):
@@ -327,10 +331,10 @@ class SearchSolver:
 
     def process_data_for_root_problem(self):
         # todo 把根节点当子问题 方便递归修正 未完成
-        fork = self.data_holder.start_node
-        merge = self.data_holder.end_node
+        fork = self.data_holder.start_node_id
+        merge = self.data_holder.end_node_id
         foil_sub_path = extract_nodes(self.df_path_foil)
-        fact_sub_path = extract_nodes(self.df_path_best)
+        fact_sub_path = extract_nodes(self.df_path_fact)
 
         # info = self.process_data_for_root_problem()
         # root_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)

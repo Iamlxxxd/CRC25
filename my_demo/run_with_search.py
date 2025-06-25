@@ -16,6 +16,7 @@ from pyinstrument import Profiler
 from my_demo.config import Config
 from my_demo.mip.MipModelSolver import ModelSolver
 from my_demo.search.SearchSolver import SearchSolver
+from my_demo.search.saturated_search.SearchSolverSaturated import SearchSolverSaturated
 import gc
 import concurrent.futures
 
@@ -51,8 +52,9 @@ def single_main(route_name=None):
 
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
-    config.out_path = os.path.join(base_dir, "my_demo", "output", "search_test")
-    solver = SearchSolver(config)
+    config.out_path = os.path.join(base_dir, "my_demo", "output", "new_search_test")
+    # solver = SearchSolver(config)
+    solver = SearchSolverSaturated(config)
     solver.do_solve()
 
     solver.process_solution_from_model()
