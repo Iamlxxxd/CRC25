@@ -17,12 +17,12 @@ class DataAnalyzer:
         self.df_path_foil = solver.df_path_foil
         self.df_path_fact = solver.df_path_fact
 
-    def do_analyze(self):
-        self.arc_must_be_feasible()
-        self.find_common_node_rows()
-        self.find_sub_forks_and_merges_node()
+    def do_basic_analyze(self):
+        self.foil_arc_must_be_feasible()
+        self.find_common_node_rows(self.df_path_foil, self.df_path_fact, self.data_holder)
+        self.find_sub_forks_and_merges_node(self.df_path_foil, self.df_path_fact, self.data_holder)
 
-    def arc_must_be_feasible(self):
+    def foil_arc_must_be_feasible(self):
         """
         foil 中的路径 如果不可行 必须转成可行
 
@@ -35,7 +35,7 @@ class DataAnalyzer:
             if not row['curb_height_max_include'] or not row['obstacle_free_width_float_include']:
                 self.data_holder.foil_must_feasible_arcs.append((i, j))
 
-    def find_common_node_rows(self):
+    def find_common_node_rows(self, df_path_foil, df_path_fact, data_holder):
         """
         找出两条路径中，从同一个点出发和到同一个点到达的所有数据。
         返回:
@@ -48,14 +48,14 @@ class DataAnalyzer:
         # 构建fact的起点和终点索引
         fact_from = defaultdict(list)
         fact_to = defaultdict(list)
-        for idx, row in self.df_path_fact.iterrows():
+        for idx, row in df_path_fact.iterrows():
             i, j = row['arc']
             # 理论上这里应该在同一个路径上不会自己有分叉 但是防止真的有这种数据先构建成list
             fact_from[i].append(j)
             fact_to[j].append(i)
 
         # 从foil出发点匹配fact出发点
-        for idx, foil_row in self.df_path_foil.iterrows():
+        for idx, foil_row in df_path_foil.iterrows():
             i, j = foil_row['arc']
             # 从同一个点出发
             if i in fact_from:
@@ -71,10 +71,10 @@ class DataAnalyzer:
                         # 到达同一个点，但来源不同
                         to_node_dict[j].append((from_node, j))
 
-        self.data_holder.fact_common_from_node_arcs = from_node_dict
-        self.data_holder.fact_common_to_node_arcs = to_node_dict
+        data_holder.fact_common_from_node_arcs = from_node_dict
+        data_holder.fact_common_to_node_arcs = to_node_dict
 
-    def find_sub_forks_and_merges_node(self):
+    def find_sub_forks_and_merges_node(self, df_path_foil, df_path_fact, data_holder):
         """
         找出foil和fact路径在某个位置分叉又汇聚的起点和终点。
         例如: foil: a-b-c-d-e, fact: a-b-f-d-e, 记录b和d点，并记录分叉和汇聚之间的各自子路径。
@@ -92,36 +92,59 @@ class DataAnalyzer:
                 nodes.append(j)
             return nodes
 
-        foil_nodes = extract_nodes(self.df_path_foil)
-        fact_nodes = extract_nodes(self.df_path_fact)
+        foil_nodes = extract_nodes(df_path_foil)
+        fact_nodes = extract_nodes(df_path_fact)
 
         # 找到所有分叉和汇聚点
         i, j = 0, 0
         n_foil, n_fact = len(foil_nodes), len(fact_nodes)
+        result = {}
+
         while i < n_foil and j < n_fact:
             if foil_nodes[i] == fact_nodes[j]:
                 i += 1
                 j += 1
             else:
+                # 记录分叉点
                 fork = foil_nodes[i - 1] if i > 0 else None
-                ii, jj = i, j
-                while ii < n_foil and jj < n_fact and foil_nodes[ii] != fact_nodes[jj]:
-                    ii += 1
-                    jj += 1
-                if ii < n_foil and jj < n_fact:
-                    merge = foil_nodes[ii]
-                    # 记录分叉和汇聚之间的子路径（不含fork和merge点）
-                    foil_sub_path = foil_nodes[i:ii]
-                    fact_sub_path = fact_nodes[j:jj]
-                    result[fork] = ForkMerge(
-                        fork=fork,
-                        merge=merge,
-                        foil_sub_path=foil_sub_path,
-                        fact_sub_path=fact_sub_path
-                    )
-                    i = ii
-                    j = jj
-                else:
-                    break
+                foil_start, fact_start = i, j
 
-        self.data_holder.foil_fact_fork_merge_nodes = result
+                # 用集合找最近的交汇点
+                foil_set = set(foil_nodes[foil_start:])
+                fact_set = set(fact_nodes[fact_start:])
+                common_nodes = foil_set & fact_set
+
+                # 如果没有交汇点，直接跳到下一个分叉
+                if not common_nodes:
+                    i += 1
+                    j += 1
+                    continue
+
+                # 找到最近的交汇点
+                min_foil_idx = n_foil
+                min_fact_idx = n_fact
+                merge = None
+                for node in common_nodes:
+                    idx_foil = foil_nodes.index(node, foil_start)
+                    idx_fact = fact_nodes.index(node, fact_start)
+                    if idx_foil + idx_fact < min_foil_idx + min_fact_idx:
+                        min_foil_idx = idx_foil
+                        min_fact_idx = idx_fact
+                        merge = node
+
+                foil_sub_path = foil_nodes[foil_start-1:min_foil_idx+1]
+                fact_sub_path = fact_nodes[fact_start-1:min_fact_idx+1]
+
+                # 记录分叉和交汇的信息
+                result[fork] = {
+                    'fork': fork,
+                    'merge': merge,
+                    'foil_sub_path': foil_sub_path,
+                    'fact_sub_path': fact_sub_path
+                }
+
+                # 更新指针，继续查找下一个分叉点
+                i = min_foil_idx
+                j = min_fact_idx
+
+        data_holder.foil_fact_fork_merge_nodes = result

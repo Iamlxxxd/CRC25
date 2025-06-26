@@ -1,5 +1,6 @@
 paths:
-  route_name: osdpm_4_1 # 指定routes下的文件夹名
+  route_name: osdpm_2_4 # 指定routes下的文件夹名
+  #osdpm_0_3 osdpm_0_2 osdpm_0_5
   store_path: outputs/
 
 params:
@@ -11,4 +12,4 @@ params:
   gen_num: 10000
   lagrangian_lambda: 2000
   time_limit: 120  # 单位：秒
-
+  show_sub_problem: False  # 是否展示sub_problem可视化

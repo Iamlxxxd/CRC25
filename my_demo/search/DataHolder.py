@@ -6,6 +6,8 @@
 @project:    CRC25
 """
 from collections import defaultdict
+
+
 class DataHolder:
     all_nodes = []
     features = ["curb_height_max", "obstacle_free_width_float"]
@@ -22,8 +24,8 @@ class DataHolder:
     all_feasible_dir_arcs = defaultdict(list)
     all_infeasible_dir_arcs = defaultdict(list)
 
-    M:float
-    visual_detail_info=dict()
+    M: float
+    visual_detail_info = dict()
 
     """foil"""
     foil_route_arcs = []
@@ -34,7 +36,13 @@ class DataHolder:
     fact_common_from_node_arcs = dict()
     fact_common_to_node_arcs = dict()
 
+    foil_fact_fork_merge_nodes = dict()
 
+    start_node_id = 0
+    end_node_id = 0
+
+    start_node_lc = ()
+    end_node_lc = ()
     def __init__(self):
         pass
 

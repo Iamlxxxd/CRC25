@@ -20,10 +20,14 @@ from my_demo.search.ArcModifyTag import ArcModifyTag
 from my_demo.search.DataHolder import DataHolder
 from my_demo.search.DataAnalyzer import DataAnalyzer
 from my_demo.search.Operator import Operator
+from my_demo.search.SubProblem import SubProblem
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
-from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string
+from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string, extract_nodes
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
+from my_demo.visual import visual_sub_problem, visual_map_foil_modded
+from my_demo.search.TrackedCounter import TrackedCounter
+
 
 class SearchSolver:
     heuristic_f = 'my_weight'
@@ -55,6 +59,10 @@ class SearchSolver:
         self.origin_node, self.dest_node, self.origin_node_loc, self.dest_node_loc, _ = self.router.set_o_d_coords(
             self.org_graph,
             self.config.gdf_coords_loaded)
+
+        self.data_holder.start_node_lc = self.origin_node
+        self.data_holder.end_node_lc = self.dest_node
+
         self.path_fact, self.G_path_fact, self.df_path_fact = self.router.get_route(self.org_graph, self.origin_node,
                                                                                     self.dest_node, self.heuristic_f)
         self.df_path_foil = self.config.df_path_foil
@@ -84,8 +92,8 @@ class SearchSolver:
         self.data_holder.point_id_map = point_id_map
         self.data_holder.id_point_map = {v: k for k, v in point_id_map.items()}
 
-        self.data_holder.start_node = self.data_holder.point_id_map.get(self.origin_node)
-        self.data_holder.end_node = self.data_holder.point_id_map.get(self.dest_node)
+        self.data_holder.start_node_id = self.data_holder.point_id_map.get(self.origin_node)
+        self.data_holder.end_node_id = self.data_holder.point_id_map.get(self.dest_node)
 
     def process_arcs(self):
         self.data_holder.M = self.org_map_df['c'].sum()
@@ -141,8 +149,8 @@ class SearchSolver:
         get_nodes = lambda x: (self.data_holder.point_id_map.get(x.coords[0]),
                                self.data_holder.point_id_map.get(x.coords[1]))
         self.df_path_foil['arc'] = self.df_path_foil['geometry'].apply(get_nodes)
-        self.df_path_foil = correct_arc_direction(self.df_path_foil, self.data_holder.start_node,
-                                                  self.data_holder.end_node)
+        self.df_path_foil = correct_arc_direction(self.df_path_foil, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         # self.df_path_foil.sort_values(by=['arc'], inplace=True)
 
         foil_cost = 0
@@ -156,8 +164,8 @@ class SearchSolver:
                                self.data_holder.point_id_map.get(x.coords[1]))
         fact_cost = 0
         self.df_path_fact['arc'] = self.df_path_fact['geometry'].apply(get_nodes)
-        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.data_holder.start_node,
-                                                  self.data_holder.end_node)
+        self.df_path_fact = correct_arc_direction(self.df_path_fact, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         for idx, row in self.df_path_fact.iterrows():
             fact_cost += self.get_row_info_by_arc(row['arc'][0], row['arc'][1])['c']
         self.data_holder.fact_cost = fact_cost
@@ -220,12 +228,15 @@ class SearchSolver:
             df.loc[df['path_type'] == 'bike', 'd'] = df['c'] * coef_perferred
             df.loc[df['path_type'] == 'walk', 'd'] = df['c'] * coef_unperferred
 
-        # if user_model["walk_bike_preference"] == 'walk':
-        #     df.loc[df['path_type'] == 'walk', 'my_weight'] = df['my_weight'] * user_model["walk_bike_preference_weight_factor"]
-        # elif user_model["walk_bike_preference"] == 'bike':
-        #     df.loc[df['path_type'] == 'bike', 'my_weight'] = df['my_weight'] * user_model["walk_bike_preference_weight_factor"]
-        #
-        # df['my_weight'] = df['my_weight'] /df['my_weight'].abs().max()
+        df['my_weight'] = df['length']
+        if user_model["walk_bike_preference"] == 'walk':
+            df.loc[df['path_type'] == 'walk', 'my_weight'] = df['my_weight'] * user_model[
+                "walk_bike_preference_weight_factor"]
+        elif user_model["walk_bike_preference"] == 'bike':
+            df.loc[df['path_type'] == 'bike', 'my_weight'] = df['my_weight'] * user_model[
+                "walk_bike_preference_weight_factor"]
+
+        df['my_weight'] = df['my_weight'] / df['my_weight'].abs().max()
 
     def get_row_info_by_arc(self, i, j):
         return self.data_holder.row_data.get((i, j), self.data_holder.row_data.get((j, i), None))
@@ -262,35 +273,75 @@ class SearchSolver:
         # self.org_map_df.loc[row.name] = row
 
     def do_solve(self):
-        self.analyzer.do_analyze()
-        self.operator_factory.do_must_be_feasible()
-        self.operator_factory.do_must_be_infeasible_arcs()
+        self.analyzer.do_basic_analyze()
+        # 这里把foil的不可行变成可行 存到了current_solution_map里
+        self.operator_factory.do_foil_must_be_feasible()
+
+        self.get_best_route_df_from_solution()
+        route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
+                                                                    self.config.user_model["attrs_variable_names"])
+        if route_error <= 0:
+            # 说明这张图只要把foil从不可行变成可行即可
+            return
+
+        counter = TrackedCounter(start=0, step=1)
+
+        root_info = self.process_data_for_root_problem()
+        root_problem = SubProblem(self, root_info, self.current_solution_map, self.new_graph, None, counter,0)
+        self.solutions = root_problem.do_solve()
+
+        # self.solutions = []
+        # for fork, info in self.data_holder.foil_fact_fork_merge_nodes.items():
+        #     sub_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
+        #     sub_solution = sub_problem.do_solve()
+        #     self.solutions.extend(sub_solution)
+
+        # self.operator_factory.do_must_be_infeasible_arcs()
         pass
 
     def process_solution_from_model(self):
+        for sub_problem in self.solutions:
+            for row in sub_problem.modified_row:
+                self.current_solution_map.loc[row.name] = row
         self.get_best_route_df_from_solution()
         self.calc_error()
 
     def get_best_route_df_from_solution(self):
         self.current_solution_map = handle_weight_with_recovery(self.current_solution_map, self.config.user_model)
 
-        _, best_graph = create_network_graph(self.current_solution_map)
+        _, self.new_graph = create_network_graph(self.current_solution_map)
 
-        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
-        _, _, self.df_best_route = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
-        self.df_best_route = correct_arc_direction(self.df_best_route, self.data_holder.start_node,
-                                                   self.data_holder.end_node)
+        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(self.new_graph, self.config.gdf_coords_loaded)
+        _, _, self.df_path_best = self.router.get_route(self.new_graph, origin_node, dest_node, self.heuristic_f)
+        self.df_path_best = correct_arc_direction(self.df_path_best, self.data_holder.start_node_id,
+                                                  self.data_holder.end_node_id)
         pass
+
     def calc_error(self):
-        sub_op_list = get_virtual_op_list(self.org_map_df, self.current_solution_map, self.config.user_model["attrs_variable_names"])
+        sub_op_list = get_virtual_op_list(self.org_map_df, self.current_solution_map,
+                                          self.config.user_model["attrs_variable_names"])
         graph_error = len([op for op in sub_op_list if op[3] == "success"])
 
-        route_error = 1 - common_edges_similarity_route_df_weighted(self.df_best_route, self.df_path_foil,
+        route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
                                                                     self.config.user_model["attrs_variable_names"])
 
         self.data_holder.visual_detail_info['graph_error'] = graph_error
         self.data_holder.visual_detail_info['route_error'] = route_error
         self.data_holder.visual_detail_info['route_error_threshold'] = self.config.user_model["route_error_threshold"]
+
+    def process_data_for_root_problem(self):
+        # todo 把根节点当子问题 方便递归修正 未完成
+        fork = self.data_holder.start_node_id
+        merge = self.data_holder.end_node_id
+        foil_sub_path = extract_nodes(self.df_path_foil)
+        fact_sub_path = extract_nodes(self.df_path_fact)
+
+        # info = self.process_data_for_root_problem()
+        # root_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
+        return {'fork': fork,
+                'merge': merge,
+                'foil_sub_path': foil_sub_path,
+                'fact_sub_path': fact_sub_path}
 
     def process_visual_data(self) -> dict:
 
@@ -300,7 +351,7 @@ class SearchSolver:
                 "meta_map": self.meta_map,
                 "df_path_fact": self.df_path_fact,
                 "df_path_foil": self.df_path_foil,
-                "best_route": self.df_best_route,
+                "best_route": self.df_path_best,
                 "org_map_df": self.current_solution_map,
                 "config": self.config,
                 "data_holder": self.data_holder,

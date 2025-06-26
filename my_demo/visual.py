@@ -187,7 +187,6 @@ def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
         name="base"
     )
 
-
     foil_arcs = list(df_path_foil['arc'])
     arc2idx = {str(arc): idx for idx, arc in enumerate(foil_arcs)}
     arc2idx.update({str((arc[1], arc[0])): idx for idx, arc in enumerate(foil_arcs)})
@@ -223,12 +222,12 @@ def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
         best_route = best_route.set_crs(meta_map['CRS'])
         best_route = best_route.to_crs(org_map_df.crs)
         m = best_route.explore(m=m,
-            color="#00A1FF",
-            style_kwds=dict(weight=10),
-            name="best route",
-            legend=False,
-            layer_kwds={"show": True, "overlay": True, "control": True, "group": "best route"}
-        )
+                               color="#00A1FF",
+                               style_kwds=dict(weight=10),
+                               name="best route",
+                               legend=False,
+                               layer_kwds={"show": True, "overlay": True, "control": True, "group": "best route"}
+                               )
 
     # 画所有modded且不在foil_path的边（橘红色，宽度7）
     modded_not_in_foil = org_map_df[(org_map_df['modded']) & (~org_map_df['in_foil'])]
@@ -306,3 +305,80 @@ def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
     m.get_root().html.add_child(branca.element.Element(legend_html))
     m.save(os.path.join(file_path, f"{tag}_visual.html"))
     return m
+
+
+def visual_sub_problem(visual_dict: dict, file_path, tag):
+    import geopandas as gpd
+    import branca
+    import folium
+
+    org_map_df = visual_dict.get("org_map_df")
+    meta_map = visual_dict.get("meta_map")
+    sub_fact = visual_dict.get("sub_fact")
+    sub_foil = visual_dict.get("sub_foil")
+    sub_best = visual_dict.get("sub_best")
+    # 只画主网络
+    m = org_map_df.explore(
+        color="lightgrey",
+        tiles="CartoDB Voyager",
+        style_kwds=dict(weight=7),
+        legend=False,
+        name="base"
+    )
+
+    sub_best = sub_best.set_crs(meta_map['CRS'])
+    sub_best = sub_best.to_crs(org_map_df.crs)
+    if not sub_best.empty:
+        sub_best = sub_best.set_crs(meta_map['CRS'])
+        sub_best = sub_best.to_crs(org_map_df.crs)
+        m = sub_best.explore(m=m,
+                             color="#00A1FF",
+                             style_kwds=dict(weight=10),
+                             name="best route",
+                             legend=False,
+                             layer_kwds={"show": True, "overlay": True, "control": True, "group": "best route"}
+                             )
+
+    if not sub_fact.empty:
+        m = sub_fact.explore(
+            m=m,
+            color="black",
+            style_kwds=dict(weight=7),
+            name="sub fact",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "sub fact"}
+        )
+    if not sub_foil.empty:
+        m = sub_foil.explore(
+            m=m,
+            color="#F5A623",
+            style_kwds=dict(weight=6),
+            name="sub foil",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "sub foil"}
+        )
+
+    # 新增：根据show_data生成图例
+    legend_html = """
+    <div style="position: fixed; 
+                top: 45px; right: 10px; width: 200px; height: auto;
+                border:2px solid grey; z-index:9999; font-size:14px; background-color:white; opacity: 0.85;">
+      <b>color of line</b><br>
+      <span style="display:inline-block;width:20px;height:4px;background:lightgrey;margin-right:5px;"></span>base<br>
+      <span style="display:inline-block;width:20px;height:4px;background:black;margin-right:5px;"></span>sub fact<br>
+      <span style="display:inline-block;width:20px;height:4px;background:#00A1FF;margin-right:5px;"></span>best route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:#F5A623;margin-right:5px;"></span>sub foil<br>
+    </div>
+    """
+    show_data = visual_dict.get("show_data")
+    if show_data:
+        show_data_html = '<div style="position: fixed; top: 260px; right: 10px; width: 220px; height: auto; border:2px solid grey; z-index:9999; font-size:14px; background-color:white; opacity: 0.85; padding: 8px;">'
+        show_data_html += "<b>Data Info</b><br>"
+        for k, v in show_data.items():
+            show_data_html += f"<span style='font-weight:bold'>{k}:</span> {v}<br>"
+        show_data_html += "</div>"
+        legend_html += show_data_html
+
+    m.get_root().html.add_child(branca.element.Element(legend_html))
+    folium.LayerControl(collapsed=False).add_to(m)
+    m.save(os.path.join(file_path, f"{tag}_visual.html"))
