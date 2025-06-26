@@ -151,7 +151,7 @@ def modify_recovery_varify(solver_modified,config, base_dir):
         visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"), config.route_name+f'_rec_{rec_arc}',[rec_arc])
         recovery_best_route = solver_rec.df_best_route
         # 对比best route
-        dist_diff = modified_best_route['w_j'].max() - recovery_best_route['w_j'].max()
+        dist_diff = modified_best_route['my_weight'].sum() - recovery_best_route['my_weight'].sum()
         arc_diff_mod_count = len(set(modified_best_route['arc'])-set(recovery_best_route['arc']))
         arc_diff_rec_count = len(set(recovery_best_route['arc'])-set(modified_best_route['arc']))
         if arc_diff_mod_count == 0 and arc_diff_rec_count == 0:
@@ -168,7 +168,7 @@ def modify_recovery_varify(solver_modified,config, base_dir):
     conclusion_df = pd.DataFrame({
         'arc':modified_arc_list,
         'modified':modified_arc['modified'],
-        'dist_diff':dist_diff_list,
+        'weight_diff':dist_diff_list,
         'arc_diff_mod_count':arc_diff_mod_count_list,
         'arc_diff_rec_count':arc_diff_rec_count_list,
         'conclusion':conclusion_list

@@ -7,26 +7,24 @@
 """
 from collections import defaultdict
 class MipDataHolder:
-    all_nodes = []
-    features = ["curb_height_max", "obstacle_free_width_float"]
-    point_id_map = dict()
-    all_arcs = []
-    foil_route_arcs = []
-    row_data = dict()
-
-    all_feasible_arcs = defaultdict(list)
-    all_infeasible_arcs = defaultdict(list)
-    all_feasible_both_way = defaultdict(list)
-    all_infeasible_both_way = defaultdict(list)
-
-    all_feasible_dir_arcs = defaultdict(list)
-    all_infeasible_dir_arcs = defaultdict(list)
-
-    M:float
-    visual_detail_info=dict()
-
     def __init__(self):
-        pass
+        self.all_nodes = []
+        self.features = ["curb_height_max", "obstacle_free_width_float"]
+        self.point_id_map = dict()
+        self.all_arcs = []
+        self.foil_route_arcs = []
+        self.row_data = dict()
+
+        self.all_feasible_arcs = defaultdict(list)
+        self.all_infeasible_arcs = defaultdict(list)
+        self.all_feasible_both_way = defaultdict(list)
+        self.all_infeasible_both_way = defaultdict(list)
+
+        self.all_feasible_dir_arcs = defaultdict(list)
+        self.all_infeasible_dir_arcs = defaultdict(list)
+
+        self.M: float
+        self.visual_detail_info = dict()
     def reset_data(self):
         MipDataHolder.all_nodes = []
         MipDataHolder.features = ["curb_height_max", "obstacle_free_width_float"]
