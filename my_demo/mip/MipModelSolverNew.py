@@ -71,12 +71,13 @@ class ModelSolverNew(ModelSolver):
         for i, j in self.data_holder.all_arcs:
             row_data = self.get_row_info_by_arc(i, j)
             obj += row_data['Deleta_p'] * self.y[i][j] + row_data['Deleta_n'] * (1 - self.y[i][j]) + self.x[i][j]
-
         self.model += obj, "obj"
 
     def solve_model(self, time_limit=3600, gap=0):
         solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
                                  logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
+        # solver = pulp.HiGHS_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
+        #                           logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
     def modify_org_map_df_by_solution(self, exclude_arcs=None):
         if exclude_arcs is None:
