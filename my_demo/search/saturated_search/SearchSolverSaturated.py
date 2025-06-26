@@ -53,6 +53,7 @@ class SearchSolverSaturated(SearchSolver):
         root_problem.calc_sub_best()
         root_problem.calc_error()
 
+        #可以考虑计算topN
         org_bc_dict = nx.edge_betweenness_centrality(root_problem.new_graph)
 
         # 使用 PriorityQueue 构建优先队列
@@ -64,7 +65,10 @@ class SearchSolverSaturated(SearchSolver):
         time_limit = 300  # 5 minutes
         while not open_queue.empty():
             if time.time() - start_time >= time_limit and self.best_leaf_node != None:
-                print("time limit reached")
+                elapsed = int(time.time() - start_time)
+                minutes = elapsed // 60
+                seconds = elapsed % 60
+                print(f"time limit reached ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
                 break
             problem = open_queue.get()
 
@@ -73,6 +77,13 @@ class SearchSolverSaturated(SearchSolver):
             if problem.route_error <= 0:
                 if self.best_leaf_node is None:
                     self.best_leaf_node = problem
+
+                    elapsed = int(time.time() - start_time)
+                    minutes = elapsed // 60
+                    seconds = elapsed % 60
+
+                    print(f"first found feasible solution ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
+
                 elif problem.better_than_other(self.best_leaf_node):
                     # 找到可行解之后看看有没有更优解
                     self.best_leaf_node = problem

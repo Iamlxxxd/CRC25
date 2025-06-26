@@ -20,7 +20,7 @@ import gc
 import concurrent.futures
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
-from visual import visual_line, visual_map, visual_map_explore,visual_map_foil_modded
+from visual import visual_line, visual_map,visual_map_foil_modded
 
 
 # from  utils.common_utils import set_seed

@@ -77,8 +77,11 @@ class ProblemNode:
                                           self.config.user_model["attrs_variable_names"])
         self.graph_error = len([op for op in sub_op_list if op[3] == "success"])
 
-        self.route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
-                                                                         self.config.user_model["attrs_variable_names"])
+        self.actual_route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
+                                                                                self.config.user_model[
+                                                                                    "attrs_variable_names"])
+
+        self.route_error = max(self.actual_route_error - self.config.user_model["route_error_threshold"], 0)
 
     def calc_sub_best(self):
         self.weight_df = handle_weight_with_recovery(self.map_df, self.config.user_model)
