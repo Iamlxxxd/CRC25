@@ -167,6 +167,7 @@ class ModelSolver:
         # 路径类型是不是能改
         df['modify_able_path_type'] = (df["path_type"] == "walk") | (df["path_type"] == "bike")
 
+        # df['curb_height_max'].fillna(0,inplace=True)
         # 高度不能改 或者满足条件
         df['curb_height_max_include'] = (df
                                          .apply(lambda x:

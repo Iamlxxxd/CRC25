@@ -6,6 +6,7 @@
 @project:    CRC25
 """
 import copy
+import itertools
 import os
 import random
 import sys
@@ -89,6 +90,51 @@ def batch_main():
             results.append((route_name, status))
     print("ALL DONE")
 
+def batch_run_compare():
+    set_seed()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(current_dir, "config.yaml")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config_dict = yaml.safe_load(f)
+    base_dir = os.path.join(current_dir, "..")
+    base_dir = os.path.abspath(base_dir)
+
+    demo_list = []
+    dist_diff_list = []
+    arc_diff_mod_count_list = []
+    arc_diff_rec_count_list = []
+    conclusion_list = []
+    for i,j in itertools.product(range(5), range(1,6)):
+    # for i,j in [(0,3)]:
+        config_dict['paths']['route_name'] = f'osdpm_{i}_{j}'
+
+        # 初始化DataLoader，传入base_dir
+        config = Config(config_dict, base_dir=base_dir)
+
+        solver = ModelSolverNew(config)
+        # solver = ModelSolver(config)
+        solver.init_model()
+        solver.solve_model()
+        with open(f'{base_dir}/solver.pk', 'wb') as file:
+            pickle.dump([solver, config], file, protocol=pickle.HIGHEST_PROTOCOL)
+        # solver_copy = deep_copy_serialization(solver)
+        solver.process_solution_from_model()
+
+        visual_data = solver.process_visual_data()
+        visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"), config.route_name)
+        # record the difference between two best route and foil route
+
+        arc_diff_mod_count = len(set(solver.df_best_route['arc'])-set(solver.df_path_foil['arc']))
+        arc_diff_foil_count = len(set(solver.df_path_foil['arc'])-set(solver.df_best_route['arc']))
+        arc_diff_mod_count_list.append(arc_diff_mod_count)
+        arc_diff_rec_count_list.append(arc_diff_foil_count)
+        conclusion_list.append(arc_diff_mod_count==0 and arc_diff_foil_count==0)
+        demo_list.append(f'osdpm_{i}_{j}')
+    conclusion_df = pd.DataFrame({'demo':demo_list,'arc_diff_mod_count': arc_diff_mod_count_list, 'arc_diff_rec_count': arc_diff_rec_count_list,'overlap':conclusion_list})
+    conclusion_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "compare99999.csv"))
+
+
 def single_main():
     set_seed()
 
@@ -142,7 +188,6 @@ def modify_recovery_varify(solver_modified,config, base_dir):
             solver_rec,config = pickle.load(file)
         # 重新初始化data_holder
         # data_holder中的数据都是静态属性,需要重新赋值
-        solver_rec.data_holder.reset_data()
         solver_rec.load_basic_data()
         solver_rec.data_process()
 
@@ -182,6 +227,7 @@ if __name__ == "__main__":
     # profiler = Profiler()
     # profiler.start()
     # batch_main()
+    # batch_run_compare()
     single_main()
     # profiler.stop()
     # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
