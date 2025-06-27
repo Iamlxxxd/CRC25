@@ -55,7 +55,9 @@ Participants will be provided with:
 
 **Key Dates:**
 
-- **Competition Submission Deadline:** July 10, 2025
+- ~~**Competition Submission Deadline:** July 10, 2025~~
+- **Code Submission Deadline:** July 17, 2025
+- **Report Submission Deadline:** July 24, 2025
 - **Competition Results Release:** July 30, 2025
 - **Announcement of Presentation Slots:** August 5, 2025
 - **Results Presentation and Winner Announcement:** at IJCAI 2025
