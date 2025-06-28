@@ -13,6 +13,7 @@ from geopandas import GeoDataFrame
 import pandas as pd
 import networkx as nx
 from my_demo.search.DataHolder import DataHolder
+from my_demo.search.saturated_search.MoveData import MoveData
 from utils.dataparser import handle_weight_with_recovery, create_network_graph
 import shapely.ops as so
 import shapely.geometry as sg
@@ -24,13 +25,16 @@ from utils.common_utils import correct_arc_direction
 from my_demo.visual import visual_sub_problem, visual_map_foil_modded
 from typing import List
 from my_demo.search.ArcModifyTag import ArcModifyTag
+from collections import defaultdict
+from my_demo.search.saturated_search.Operator import add_one_move
 
 
 class ProblemNode:
     df_path_best: GeoDataFrame = None
     df_path_foil: GeoDataFrame = None
 
-    def __init__(self, solver, info_tuple, modified_arc_list: List[tuple], map_df, map_graph, master, idx_gen, level):
+    def __init__(self, solver, info_tuple, modified_move_list: List[MoveData], map_df, map_graph, master, idx_gen,
+                 level):
         self.idx_gen = idx_gen
         self.idx = next(idx_gen)
         self.level = level
@@ -48,25 +52,42 @@ class ProblemNode:
 
         self.map_df = deepcopy(map_df)
         # todo 暂时没操作图 先不deepcopy
-        self.map_graph = map_graph
-        if master:
-            self.inherit = [] + modified_arc_list + master.inherit
-        else:
-            self.inherit = [] + modified_arc_list
-
-        self.inherit = sorted(set(self.inherit))
-
-        self.modified_arc_list = modified_arc_list
 
         self.master = master
+
+        self.map_graph = map_graph
+        if master:
+            # 用来分析 哪个算子生效多的 #todo 可能影响效率后面需要删除
+            self.inherit_for_visual = deepcopy(master.inherit_for_visual)
+
+            # 用来hash 认为操作一致的
+            self.inherit = [] + master.inherit
+
+        else:
+            # 初始化嵌套字典结构
+            self.inherit_for_visual = dict()
+            self.inherit = []
+
+            # 添加修改记录
+        for move in modified_move_list:
+            add_one_move(self.inherit_for_visual, move)
+
+            self.inherit.append(move)
+
+        self.modified_move_list = modified_move_list
+
+        self.inherit = sorted(set(self.inherit))
 
         self.df_path_foil = self.org_solver.df_path_foil
         self.graph_error = 0
         self.route_error = 0
 
+        self.move_str = None
+
     def apply_modified_arc(self):
         # todo 可以改成操作graph
-        for (i, j), modify_tag in self.modified_arc_list:
+        for move_data in self.modified_move_list:
+            (i, j), modify_tag, name = move_data.arc, move_data.modify_tag, move_data.operator_type
             modified_row = self.org_solver.modify_df_arc_with_attr(i, j, modify_tag)
             solution_row = self.org_solver.current_solution_map.loc[modified_row.name]
             modified_row['modified'] = modified_row['modified'] + solution_row['modified']
@@ -104,7 +125,6 @@ class ProblemNode:
         return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
 
     def __hash__(self):
-        # 用fork, merge, modified_arc_list的字符串表示做hash
         return hash(str(self.inherit))
 
     def __eq__(self, other):
@@ -113,10 +133,21 @@ class ProblemNode:
         return str(self.inherit) == str(other.inherit)
 
     def __str__(self):
-        return f"【{self.idx},{self.level}:r:{self.route_error}g:{self.graph_error}】#【{self.fork}#{self.merge}#{self.modified_arc_list}】"
+        return f"【{self.idx},{self.level}:r:{self.route_error}g:{self.graph_error}】#【{self.fork}#{self.merge}#{self.visual_move_data()}】"
 
     def __repr__(self):
         return self.__str__()
+
+    def visual_move_data(self) -> str:
+        if self.move_str is not None:
+            return self.move_str
+
+        return_str = ""
+        for move in self.modified_move_list:
+            return_str += f"{move.arc},{move.modify_tag.name},{move.operator_type}"
+
+        self.move_str = f"【{return_str}】"
+        return self.move_str
 
     def better_than_other(self, other):
         return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)

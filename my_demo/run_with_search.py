@@ -88,9 +88,9 @@ def batch_main():
     print("ALL DONE")
 
 if __name__ == "__main__":
-    profiler = Profiler()
-    profiler.start()
+    # profiler = Profiler()
+    # profiler.start()
     # batch_main()
     single_main()
-    profiler.stop()
-    profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
+    # profiler.stop()
+    # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)

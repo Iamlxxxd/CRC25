@@ -101,10 +101,10 @@ class SearchSolverSaturated(SearchSolver):
             df_path_fact = self.generate_sub_fact(info)
             modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem.new_graph, df_path_fact,
                                                                            org_bc_dict)
-
-            for modify_arc in modify_result_set:
+            print(problem)
+            for move in modify_result_set:
                 # todo 这里不可能不命中，至少起点和终点是一样的
-                sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
+                sub_problem = ProblemNode(self, info, [move], problem.map_df, problem.new_graph, problem,
                                           problem.idx_gen, problem.level + 1)
                 if sub_problem in closed_set:
                     continue
@@ -132,6 +132,6 @@ class SearchSolverSaturated(SearchSolver):
 
     def process_solution_from_model(self):
         self.current_solution_map = self.best_leaf_node.map_df
-
+        print(self.best_leaf_node.inherit_for_visual)
         self.get_best_route_df_from_solution()
         self.calc_error()

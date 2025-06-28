@@ -13,16 +13,18 @@ import math
 from collections import defaultdict
 from typing import List
 import random
+from my_demo.search.saturated_search.MoveData import MoveData
 
-def do_foil_must_be_feasible(root_solver) -> List[tuple]:
-    modified_arc_list = []
+
+def do_foil_must_be_feasible(root_solver) -> List[MoveData]:
+    modified_arc_list = dict()
     for arc in root_solver.data_holder.foil_must_feasible_arcs:
-        modified_arc_list.append((arc, ArcModifyTag.TO_FE))
+        add_one_move(modified_arc_list, MoveData(arc, ArcModifyTag.TO_FE, 'foil_must_fe'))
 
-    return modified_arc_list
+    return list(modified_arc_list.values())
 
 
-def generate_multi_modify_arc_by_graph_feature(solver,info, G, df_path_fact,org_bc_dict=None) -> List[tuple]:
+def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, org_bc_dict=None) -> List[MoveData]:
     """
     Args:
         father_problem:
@@ -65,23 +67,30 @@ def generate_multi_modify_arc_by_graph_feature(solver,info, G, df_path_fact,org_
             max_alt_ratio = alt_ratio_score
             max_alt_ratio_arc = arc_id
 
-    result_set = set()
+    result_set = dict()
     if max_node_deg_arc is not None:
-        result_set.add((max_node_deg_arc, ArcModifyTag.TO_INFE))
+        add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'deg'))
     if max_edge_bc_arc is not None:
-        result_set.add((max_edge_bc_arc, ArcModifyTag.TO_INFE))
+        add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'bc'))
     if max_alt_ratio_arc is not None:
-        result_set.add((max_alt_ratio_arc, ArcModifyTag.TO_INFE))
+        add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'alt_ratio'))
 
     fact_id_route = info['fact_sub_path']
-    fork = (fact_id_route[0],fact_id_route[1])
-    merge = (fact_id_route[-2],fact_id_route[-1])
+    fork = (fact_id_route[0], fact_id_route[1])
+    merge = (fact_id_route[-2], fact_id_route[-1])
 
     random_node = random.choice([fork, merge])
-    result_set.add((random_node, ArcModifyTag.TO_INFE))
+    add_one_move(result_set, MoveData(random_node, ArcModifyTag.TO_INFE, 'fork_merge'))
 
     # todo 可以再加一个 lp解出来的候选集
-    return result_set
+    return list(result_set.values())
+
+
+def add_one_move(result_dict, move_data):
+    if move_data in result_dict:
+        result_dict[move_data].operator_type.update(move_data.operator_type)
+    else:
+        result_dict[move_data] = move_data
 
 
 def calculate_alt_ratio(u, v, G, row, weight='dijkstra'):
