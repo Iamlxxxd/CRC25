@@ -18,10 +18,13 @@ import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
 from my_demo.mip.MipDataHolder import MipDataHolder
-from my_demo.mip.MipModelSolver import ModelSolver
-from my_demo.mip.MipModelSolverNew import ModelSolverNew
+from my_demo.mip.ModelSolver import ModelSolver
+from my_demo.mip.PulpModelSolver import PulpModelSolver
 import gc
 import concurrent.futures
+
+from my_demo.mip.ScipyModelSolver import ScipyModelSolver
+
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
 from visual import visual_line, visual_map,visual_map_foil_modded
@@ -47,7 +50,7 @@ def run_for_route(route_name, config_template, base_dir, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     # 初始化Config
     config_obj = Config(config, base_dir=base_dir)
-    solver = ModelSolverNew(config_obj)
+    solver = PulpModelSolver(config_obj)
     solver.init_model()
     solver.solve_model()
     solver.process_solution_from_model()
@@ -112,8 +115,9 @@ def batch_run_compare():
         # 初始化DataLoader，传入base_dir
         config = Config(config_dict, base_dir=base_dir)
 
-        solver = ModelSolverNew(config)
-        # solver = ModelSolver(config)
+        # solver = PulpModelSolver(config)
+        solver = ScipyModelSolver(config)
+        # solver = GrbModelSolver(config)
         solver.init_model()
         solver.solve_model()
         with open(f'{base_dir}/solver.pk', 'wb') as file:
@@ -149,7 +153,8 @@ def single_main():
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
 
-    solver = ModelSolverNew(config)
+    # solver = PulpModelSolver(config)
+    solver = ScipyModelSolver(config)
     # solver = ModelSolver(config)
     solver.init_model()
     solver.solve_model()
