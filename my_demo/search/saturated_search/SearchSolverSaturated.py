@@ -132,6 +132,6 @@ class SearchSolverSaturated(SearchSolver):
 
     def process_solution_from_model(self):
         self.current_solution_map = self.best_leaf_node.map_df
-        print(self.best_leaf_node.inherit_for_visual)
+        print(self.best_leaf_node.inherit)
         self.get_best_route_df_from_solution()
         self.calc_error()

@@ -71,9 +71,9 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, or
     if max_node_deg_arc is not None:
         add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'deg'))
     if max_edge_bc_arc is not None:
-        add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'bc'))
+        add_one_move(result_set, MoveData(max_edge_bc_arc, ArcModifyTag.TO_INFE, 'bc'))
     if max_alt_ratio_arc is not None:
-        add_one_move(result_set, MoveData(max_node_deg_arc, ArcModifyTag.TO_INFE, 'alt_ratio'))
+        add_one_move(result_set, MoveData(max_alt_ratio_arc, ArcModifyTag.TO_INFE, 'alt_ratio'))
 
     fact_id_route = info['fact_sub_path']
     fork = (fact_id_route[0], fact_id_route[1])

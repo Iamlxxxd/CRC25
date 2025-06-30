@@ -30,8 +30,6 @@ from my_demo.search.saturated_search.Operator import add_one_move
 
 
 class ProblemNode:
-    df_path_best: GeoDataFrame = None
-    df_path_foil: GeoDataFrame = None
 
     def __init__(self, solver, info_tuple, modified_move_list: List[MoveData], map_df, map_graph, master, idx_gen,
                  level):
@@ -78,6 +76,7 @@ class ProblemNode:
 
         self.inherit = sorted(set(self.inherit))
 
+        self.df_path_best: GeoDataFrame = None
         self.df_path_foil = self.org_solver.df_path_foil
         self.graph_error = 0
         self.route_error = 0
@@ -122,7 +121,8 @@ class ProblemNode:
 
     def __lt__(self, other):
         # 先比route_error，再比graph_error
-        return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
+        # return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
+        return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)
 
     def __hash__(self):
         return hash(str(self.inherit))
