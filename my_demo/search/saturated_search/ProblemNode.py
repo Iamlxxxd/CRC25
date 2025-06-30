@@ -120,3 +120,9 @@ class ProblemNode:
 
     def better_than_other(self, other):
         return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)
+
+    def is_feasible(self):
+        return self.route_error <= 0
+
+    def not_feasible(self):
+        return not self.is_feasible()

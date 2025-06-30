@@ -14,6 +14,7 @@ from collections import defaultdict
 from typing import List
 import random
 
+
 def do_foil_must_be_feasible(root_solver) -> List[tuple]:
     modified_arc_list = []
     for arc in root_solver.data_holder.foil_must_feasible_arcs:
@@ -22,7 +23,7 @@ def do_foil_must_be_feasible(root_solver) -> List[tuple]:
     return modified_arc_list
 
 
-def generate_multi_modify_arc_by_graph_feature(solver,info, G, df_path_fact,org_bc_dict=None) -> List[tuple]:
+def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, org_bc_dict=None) -> List[tuple]:
     """
     Args:
         father_problem:
@@ -37,51 +38,63 @@ def generate_multi_modify_arc_by_graph_feature(solver,info, G, df_path_fact,org_
     else:
         edge_bc = org_bc_dict
 
-    # 只遍历一次，记录最大值
-    max_node_deg = -float('inf')
-    max_node_deg_arc = None
-    max_edge_bc = -float('inf')
-    max_edge_bc_arc = None
-    max_alt_ratio = -float('inf')
-    max_alt_ratio_arc = None
+    arc_feature_list = []
+    fact_id_route = info['fact_sub_path']
+    fork = (fact_id_route[0], fact_id_route[1])
+    merge = (fact_id_route[-2], fact_id_route[-1])
+    random_arc = random.choice([fork, merge])
 
+    # 先收集所有特征
     for idx, row in df_path_fact.iterrows():
         arc_id = row['arc']
         u, v = id_point_map.get(arc_id[0]), id_point_map.get(arc_id[1])
 
-        # 度中心性
+        # 特征1：度中心性
         node_deg_score = (deg_cent.get(u, 0) + deg_cent.get(v, 0)) / 2
-        if node_deg_score > max_node_deg:
-            max_node_deg = node_deg_score
-            max_node_deg_arc = arc_id
-        # 中介中心性
+        # 特征2：中介中心性
         edge_bc_score = get_edge_bc_score(u, v, G, edge_bc)
-        if edge_bc_score > max_edge_bc:
-            max_edge_bc = edge_bc_score
-            max_edge_bc_arc = arc_id
-        # 替换路径比
+        # 特征3：替换路径比
         alt_ratio_score = calculate_alt_ratio(u, v, G, row, weight=solver.heuristic_f)
-        if alt_ratio_score > max_alt_ratio:
-            max_alt_ratio = alt_ratio_score
-            max_alt_ratio_arc = arc_id
+        # 特征4：是否为随机arc
+        rand_score = 1.5 if arc_id == random_arc else 1
+        arc_feature_list.append({
+            'arc_id': arc_id,
+            'node_deg': node_deg_score,
+            'edge_bc': edge_bc_score,
+            'alt_ratio': alt_ratio_score,
+            'fork_merge': rand_score
+        })
 
-    result_set = set()
-    if max_node_deg_arc is not None:
-        result_set.add((max_node_deg_arc, ArcModifyTag.TO_INFE))
-    if max_edge_bc_arc is not None:
-        result_set.add((max_edge_bc_arc, ArcModifyTag.TO_INFE))
-    if max_alt_ratio_arc is not None:
-        result_set.add((max_alt_ratio_arc, ArcModifyTag.TO_INFE))
+    # 归一化（去除reverse参数和翻转逻辑）
+    def normalize(feat_list, key):
+        vals = [x[key] for x in feat_list]
+        min_v, max_v = min(vals), max(vals)
+        if max_v == min_v:
+            return [0.0 for _ in vals]
+        return [(v - min_v) / (max_v - min_v) for v in vals]
 
-    fact_id_route = info['fact_sub_path']
-    fork = (fact_id_route[0],fact_id_route[1])
-    merge = (fact_id_route[-2],fact_id_route[-1])
+    norm_deg = normalize(arc_feature_list, 'node_deg')
+    norm_bc = normalize(arc_feature_list, 'edge_bc')
+    norm_alt = normalize(arc_feature_list, 'alt_ratio')
+    norm_rand = normalize(arc_feature_list, 'fork_merge')
 
-    random_node = random.choice([fork, merge])
-    result_set.add((random_node, ArcModifyTag.TO_INFE))
+    arc_scores = []
+    for i, feat in enumerate(arc_feature_list):
+        score = (
+                0.15 * norm_deg[i] +
+                0.35 * norm_bc[i] +
+                0.45 * norm_alt[i] +
+                0.05 * norm_rand[i]
+        )
+        arc_scores.append((feat['arc_id'], score))
 
-    # todo 可以再加一个 lp解出来的候选集
-    return result_set
+    # 按分数降序排序，取topN
+    arc_scores.sort(key=lambda x: x[1], reverse=True)
+    result = []
+    for arc_id, _ in arc_scores[:4]:
+        result.append((arc_id, ArcModifyTag.TO_INFE))
+
+    return result
 
 
 def calculate_alt_ratio(u, v, G, row, weight='dijkstra'):

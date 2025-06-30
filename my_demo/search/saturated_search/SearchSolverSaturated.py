@@ -34,10 +34,11 @@ import time
 
 
 class SearchSolverSaturated(SearchSolver):
-    best_leaf_node: ProblemNode = None
 
     def __init__(self, config: Config):
         super().__init__(config)
+        self.best_leaf_node: ProblemNode = None
+        self.current_best: ProblemNode = None
 
     def do_solve(self):
         self.analyzer.do_basic_analyze()
@@ -53,7 +54,7 @@ class SearchSolverSaturated(SearchSolver):
         root_problem.calc_sub_best()
         root_problem.calc_error()
 
-        #可以考虑计算topN
+        # 可以考虑计算topN
         org_bc_dict = nx.edge_betweenness_centrality(root_problem.new_graph)
 
         # 使用 PriorityQueue 构建优先队列
@@ -90,10 +91,6 @@ class SearchSolverSaturated(SearchSolver):
 
                 continue
 
-            if (self.best_leaf_node != None and
-                    problem.graph_error >= self.best_leaf_node.graph_error):
-                continue
-
             self.analyzer.find_sub_forks_and_merges_node(problem.df_path_foil, problem.df_path_best,
                                                          problem.data_holder)
 
@@ -107,12 +104,23 @@ class SearchSolverSaturated(SearchSolver):
                 # todo 这里不可能不命中，至少起点和终点是一样的
                 sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
                                           problem.idx_gen, problem.level + 1)
+
+
+
                 if sub_problem in closed_set:
                     continue
 
                 sub_problem.apply_modified_arc()
                 sub_problem.calc_sub_best()
                 sub_problem.calc_error()
+
+                if self.current_best is None or sub_problem.better_than_other(self.current_best):
+                    self.current_best = sub_problem
+
+                if self.pruning(sub_problem):
+                    print(f"CUT {sub_problem}")
+                    continue
+
                 open_queue.put(sub_problem)
 
     def generate_sub_fact(self, info_tuple):
@@ -136,3 +144,46 @@ class SearchSolverSaturated(SearchSolver):
         print(self.best_leaf_node.inherit)
         self.get_best_route_df_from_solution()
         self.calc_error()
+
+    def pruning(self, problem) -> bool:
+        if self.best_leaf_node is not None \
+                and problem.not_feasible() \
+                and problem.graph_error >= self.best_leaf_node.graph_error:
+            # 已经找到了可行解 当前是不可行解  但是发现有graph error大于可行解的,这样是不可能找到比当前可行解好的方案
+            return True
+
+        if problem.not_feasible() \
+                and problem.route_error > self.current_best.route_error \
+                and problem.graph_error >= self.current_best.graph_error:
+            # 当前route error 更差 但是graph error不好于当前最小
+            do_pruning = self.calculate_acceptance_probability(problem) <= random.random()
+            return do_pruning
+
+        return False
+
+    def calculate_acceptance_probability(self, problem, max_level=50):
+        """
+        计算接受当前解的概率，随着层数增加，不接受差解的概率增大。
+
+        Args:
+            current_best: 当前最优解
+            current: 当前解
+            layer: 当前层数
+            level: 最大层数（用来控制层数的影响程度）
+
+        Returns:
+            probability: 接受当前解的概率
+        """
+        # 计算当前解与最优解的差异（以route_error或graph_error为例）
+        delta = (problem.route_error - self.current_best.route_error) + (
+                problem.graph_error - self.current_best.graph_error)
+
+        if max_level == problem.level:
+            acceptance_probability = 0
+        else:
+            acceptance_probability = math.exp((-delta*50) / (max_level - problem.level))
+
+        # 将概率限制在[0, 1]范围内
+        acceptance_probability = max(0, min(1, acceptance_probability))
+
+        return acceptance_probability
