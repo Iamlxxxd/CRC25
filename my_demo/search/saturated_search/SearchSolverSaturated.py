@@ -102,6 +102,7 @@ class SearchSolverSaturated(SearchSolver):
             modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem.new_graph, df_path_fact,
                                                                            org_bc_dict)
 
+            print(problem)
             for modify_arc in modify_result_set:
                 # todo 这里不可能不命中，至少起点和终点是一样的
                 sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
@@ -132,6 +133,6 @@ class SearchSolverSaturated(SearchSolver):
 
     def process_solution_from_model(self):
         self.current_solution_map = self.best_leaf_node.map_df
-
+        print(self.best_leaf_node.inherit)
         self.get_best_route_df_from_solution()
         self.calc_error()

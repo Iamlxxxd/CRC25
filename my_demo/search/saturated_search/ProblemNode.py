@@ -27,8 +27,6 @@ from my_demo.search.ArcModifyTag import ArcModifyTag
 
 
 class ProblemNode:
-    df_path_best: GeoDataFrame = None
-    df_path_foil: GeoDataFrame = None
 
     def __init__(self, solver, info_tuple, modified_arc_list: List[tuple], map_df, map_graph, master, idx_gen, level):
         self.idx_gen = idx_gen
@@ -60,6 +58,7 @@ class ProblemNode:
 
         self.master = master
 
+        self.df_path_best: GeoDataFrame = None
         self.df_path_foil = self.org_solver.df_path_foil
         self.graph_error = 0
         self.route_error = 0
@@ -101,7 +100,8 @@ class ProblemNode:
 
     def __lt__(self, other):
         # 先比route_error，再比graph_error
-        return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
+        # return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
+        return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)
 
     def __hash__(self):
         # 用fork, merge, modified_arc_list的字符串表示做hash
