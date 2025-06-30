@@ -5,19 +5,26 @@
 @time   :    2025/6/6 10:20
 @project:    CRC25
 """
+import copy
+import itertools
 import os
 import random
 import sys
 import pickle
 
 import numpy as np
+import pandas as pd
 import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
-from my_demo.mip.MipModelSolver import ModelSolver
-from my_demo.mip.MipModelSolverNew import ModelSolverNew
+from my_demo.mip.MipDataHolder import MipDataHolder
+from my_demo.mip.ModelSolver import ModelSolver
+from my_demo.mip.PulpModelSolver import PulpModelSolver
 import gc
 import concurrent.futures
+
+from my_demo.mip.ScipyModelSolver import ScipyModelSolver
+
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
 from visual import visual_line, visual_map,visual_map_foil_modded
@@ -43,7 +50,7 @@ def run_for_route(route_name, config_template, base_dir, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     # 初始化Config
     config_obj = Config(config, base_dir=base_dir)
-    solver = ModelSolverNew(config_obj)
+    solver = PulpModelSolver(config_obj)
     solver.init_model()
     solver.solve_model()
     solver.process_solution_from_model()
@@ -86,6 +93,52 @@ def batch_main():
             results.append((route_name, status))
     print("ALL DONE")
 
+def batch_run_compare():
+    set_seed()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(current_dir, "config.yaml")
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config_dict = yaml.safe_load(f)
+    base_dir = os.path.join(current_dir, "..")
+    base_dir = os.path.abspath(base_dir)
+
+    demo_list = []
+    dist_diff_list = []
+    arc_diff_mod_count_list = []
+    arc_diff_rec_count_list = []
+    conclusion_list = []
+    for i,j in itertools.product(range(5), range(1,6)):
+    # for i,j in [(0,3)]:
+        config_dict['paths']['route_name'] = f'osdpm_{i}_{j}'
+
+        # 初始化DataLoader，传入base_dir
+        config = Config(config_dict, base_dir=base_dir)
+
+        # solver = PulpModelSolver(config)
+        solver = ScipyModelSolver(config)
+        # solver = GrbModelSolver(config)
+        solver.init_model()
+        solver.solve_model()
+        with open(f'{base_dir}/solver.pk', 'wb') as file:
+            pickle.dump([solver, config], file, protocol=pickle.HIGHEST_PROTOCOL)
+        # solver_copy = deep_copy_serialization(solver)
+        solver.process_solution_from_model()
+
+        visual_data = solver.process_visual_data()
+        visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"), config.route_name)
+        # record the difference between two best route and foil route
+
+        arc_diff_mod_count = len(set(solver.df_best_route['arc'])-set(solver.df_path_foil['arc']))
+        arc_diff_foil_count = len(set(solver.df_path_foil['arc'])-set(solver.df_best_route['arc']))
+        arc_diff_mod_count_list.append(arc_diff_mod_count)
+        arc_diff_rec_count_list.append(arc_diff_foil_count)
+        conclusion_list.append(arc_diff_mod_count==0 and arc_diff_foil_count==0)
+        demo_list.append(f'osdpm_{i}_{j}')
+    conclusion_df = pd.DataFrame({'demo':demo_list,'arc_diff_mod_count': arc_diff_mod_count_list, 'arc_diff_rec_count': arc_diff_rec_count_list,'overlap':conclusion_list})
+    conclusion_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "compare99999.csv"))
+
+
 def single_main():
     set_seed()
 
@@ -100,10 +153,14 @@ def single_main():
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
 
-    solver = ModelSolverNew(config)
+    # solver = PulpModelSolver(config)
+    solver = ScipyModelSolver(config)
     # solver = ModelSolver(config)
     solver.init_model()
     solver.solve_model()
+    with open(f'{base_dir}/solver.pk', 'wb') as file:
+        pickle.dump([solver,config], file, protocol=pickle.HIGHEST_PROTOCOL)
+    # solver_copy = deep_copy_serialization(solver)
     solver.process_solution_from_model()
 
     visual_data = solver.process_visual_data()
@@ -114,11 +171,68 @@ def single_main():
 
     # visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"),config.route_name)
+    varify_df = modify_recovery_varify(solver,config,base_dir)
+    varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
     print("DONE")
+
+def modify_recovery_varify(solver_modified,config, base_dir):
+    # 修改后的arc
+    modified_map = solver_modified.org_map_df
+    modified_arc = modified_map[modified_map['modified'].str.len().gt(0)]
+    modified_arc_list = modified_arc['arc'].tolist()
+    # 修改后的最优路由
+    modified_best_route = solver_modified.df_best_route
+    dist_diff_list = []
+    arc_diff_mod_count_list = []
+    arc_diff_rec_count_list = []
+    conclusion_list = []
+    for rec_arc in modified_arc_list:
+        # solver_rec = deep_copy_serialization(solver_copy)
+
+        with open(f'{base_dir}/solver.pk', 'rb') as file:
+            solver_rec,config = pickle.load(file)
+        # 重新初始化data_holder
+        # data_holder中的数据都是静态属性,需要重新赋值
+        solver_rec.load_basic_data()
+        solver_rec.data_process()
+
+        solver_rec.process_solution_from_model([rec_arc])
+        visual_data = solver_rec.process_visual_data()
+        visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"), config.route_name+f'_rec_{rec_arc}',[rec_arc])
+        recovery_best_route = solver_rec.df_best_route
+        # 对比best route
+        dist_diff = modified_best_route['my_weight'].sum() - recovery_best_route['my_weight'].sum()
+        arc_diff_mod_count = len(set(modified_best_route['arc'])-set(recovery_best_route['arc']))
+        arc_diff_rec_count = len(set(recovery_best_route['arc'])-set(modified_best_route['arc']))
+        if arc_diff_mod_count == 0 and arc_diff_rec_count == 0:
+            conclusion = '无效修改'
+            print(f'修改边{rec_arc}是无效操作,不影响最短路')
+        else:
+            conclusion = '有效修改'
+            print(f'修改边{rec_arc}影响{arc_diff_mod_count+arc_diff_rec_count}条边')
+        dist_diff_list.append(dist_diff)
+        arc_diff_mod_count_list.append(arc_diff_mod_count)
+        arc_diff_rec_count_list.append(arc_diff_rec_count)
+        conclusion_list.append(conclusion)
+    # 结论df
+    conclusion_df = pd.DataFrame({
+        'arc':modified_arc_list,
+        'modified':modified_arc['modified'],
+        'weight_diff':dist_diff_list,
+        'arc_diff_mod_count':arc_diff_mod_count_list,
+        'arc_diff_rec_count':arc_diff_rec_count_list,
+        'conclusion':conclusion_list
+    })
+    return conclusion_df
+
+def deep_copy_serialization(obj):
+    return pickle.loads(pickle.dumps(obj))
+
 if __name__ == "__main__":
     # profiler = Profiler()
     # profiler.start()
     # batch_main()
+    # batch_run_compare()
     single_main()
     # profiler.stop()
     # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)

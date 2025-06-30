@@ -100,7 +100,75 @@ def visual_map(visual_dict: dict):
     plt.show()
 
 
-def visual_map_foil_modded(visual_dict: dict, file_path, tag):
+def visual_map_explore(visual_dict: dict,file_path):
+    import geopandas as gpd
+    import branca
+    meta_map = visual_dict.get("meta_map")
+    gdf_coords = visual_dict.get("gdf_coords")
+    origin_node = visual_dict.get("origin_node_loc_length")
+    dest_node = visual_dict.get("dest_node_loc_length")
+    df_path_fact = visual_dict.get("df_path_fact")
+    df_path_foil = visual_dict.get("df_path_foil")
+    best_route = visual_dict.get("best_route")
+    org_map_df = visual_dict.get("org_map_df")
+    config = visual_dict.get("config")
+
+    # 只画主网络
+    m = org_map_df.explore(
+        color="lightgrey",
+        tiles="CartoDB Voyager",
+        style_kwds=dict(weight=1),
+        legend=False
+    )
+
+    if df_path_fact is not None and not df_path_fact.empty and df_path_fact.geometry.notnull().any():
+        df_path_fact = df_path_fact.set_crs(meta_map['CRS'])
+        df_path_fact = df_path_fact.to_crs(org_map_df.crs)
+        m = df_path_fact.explore(m=m, color="grey", style_kwds=dict(weight=7), name="fact_route", legend=False)
+
+
+    if df_path_foil is not None and not df_path_foil.empty and df_path_foil.geometry.notnull().any():
+        m = df_path_foil.explore(m=m, color="black", style_kwds=dict(weight=7), name="foil_route", legend=False)
+    if best_route is not None and not best_route.empty and best_route.geometry.notnull().any():
+        m = best_route.explore(m=m, color="green", style_kwds=dict(weight=2), name="best_route", legend=False)
+
+    # 起点终点
+    if gdf_coords is not None and not gdf_coords.empty:
+        m = gdf_coords.head(1).explore(m=m, color="blue", marker_kwds=dict(radius=8), name="Origin", legend=False)
+        m = gdf_coords.tail(1).explore(m=m, color="red", marker_kwds=dict(radius=8), name="Destination", legend=False)
+
+    # 起点终点节点
+    if origin_node is not None:
+        m = gpd.GeoSeries([origin_node], crs=org_map_df.crs).explore(m=m, color="blue", marker_kwds=dict(radius=5),
+                                                                 name="Origin Node", legend=False)
+    if dest_node is not None:
+        m = gpd.GeoSeries([dest_node], crs=org_map_df.crs).explore(m=m, color="red", marker_kwds=dict(radius=5),
+                                                               name="Dest Node", legend=False)
+
+    # 添加自定义图例
+    legend_html = """
+    <div style="position: fixed; 
+                bottom: 50px; left: 50px; width: 180px; height: 170px; 
+                border:2px solid grey; z-index:9999; font-size:14px;
+                background-color:white; opacity: 0.85;
+                ">
+      <b>图例 Legend</b><br>
+      <span style="display:inline-block;width:20px;height:4px;background:grey;margin-right:5px;"></span>fact_route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:black;margin-right:5px;"></span>foil_route<br>
+      <span style="display:inline-block;width:20px;height:4px;background:green;margin-right:5px;"></span>best_route<br>
+      <span style="display:inline-block;width:12px;height:12px;background:blue;border-radius:6px;display:inline-block;margin-right:5px;"></span>Origin<br>
+      <span style="display:inline-block;width:12px;height:12px;background:red;border-radius:6px;display:inline-block;margin-right:5px;"></span>Destination<br>
+    </div>
+    """
+    from folium import Map
+    if hasattr(m, 'get_root'):
+        m.get_root().html.add_child(branca.element.Element(legend_html))
+
+    m.save(os.path.join(file_path, "map_f.html"))
+    return m
+
+
+def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
     import geopandas as gpd
     import branca
     import folium
@@ -172,7 +240,16 @@ def visual_map_foil_modded(visual_dict: dict, file_path, tag):
             legend=False,
             layer_kwds={"show": True, "overlay": True, "control": True, "group": "modded not in foil"}
         )
-
+    if not rec_arcs is None:
+        recovery_edges = org_map_df[org_map_df['arc'].isin(rec_arcs)]
+        m = recovery_edges.explore(
+            m=m,
+            color="purple",
+            style_kwds=dict(weight=7),
+            name="recovery edge",
+            legend=False,
+            layer_kwds={"show": True, "overlay": True, "control": True, "group": "modded not in foil"}
+        )
     # ----------- 图层4：Foil Route（交替黑/橙/红） -----------
     foil_edges = org_map_df[org_map_df['in_foil']].sort_values(by='arc', key=lambda x: x.map(arc2idx))
     foil_edges = foil_edges.copy()

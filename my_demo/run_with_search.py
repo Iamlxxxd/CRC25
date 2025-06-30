@@ -14,7 +14,7 @@ import numpy as np
 import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
-from my_demo.mip.MipModelSolver import ModelSolver
+from my_demo.mip.ModelSolver import ModelSolver
 from my_demo.search.SearchSolver import SearchSolver
 from my_demo.search.saturated_search.SearchSolverSaturated import SearchSolverSaturated
 import gc
