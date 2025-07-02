@@ -101,7 +101,8 @@ class ProblemNode:
     def __lt__(self, other):
         # 先比route_error，再比graph_error
         # return (-self.level, self.route_error, self.graph_error) < (-self.level, other.route_error, other.graph_error)
-        return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)
+        # return (self.route_error, self.graph_error) < (other.route_error, other.graph_error)
+        return (self.route_error,self.level, self.graph_error) < (other.route_error, self.level,other.graph_error)
 
     def __hash__(self):
         # 用fork, merge, modified_arc_list的字符串表示做hash

@@ -126,3 +126,61 @@ def extract_nodes(df):
             nodes.append(i)
         nodes.append(j)
     return nodes
+
+
+from joblib import Parallel, delayed
+import networkx as nx
+
+
+# 在compute_chunk中添加weight参数
+def compute_chunk(G, sources, targets, weight='weight'):
+    return nx.edge_betweenness_centrality_subset(
+        G, sources, targets, normalized=False, weight=weight)
+
+
+def calc_bc(G, weight='weight', n_jobs=4):
+    # 获取全局参数
+    n = G.number_of_nodes()
+    is_directed = G.is_directed()
+
+    all_nodes = list(G.nodes())
+    n = len(all_nodes)
+
+    # 计算每个chunk的大小（向上取整）
+    chunk_size = (n + n_jobs - 1) // n_jobs  # 确保均匀分割
+
+    # 使用列表推导式分割节点
+    chunks = [
+        all_nodes[i:i + chunk_size]
+        for i in range(0, n, chunk_size)
+    ]
+
+    # 并行计算原始计数
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(nx.edge_betweenness_centrality_subset)(
+            G,
+            sources=chunk,
+            targets=all_nodes,
+            normalized=False,  # 关键：不归一化
+            weight=weight
+        ) for chunk in chunks
+    )
+
+    # 合并结果
+    total_counts = {}
+    for res in results:
+        for edge, count in res.items():
+            # 处理无向图边表示
+            canonical_edge = (min(edge), max(edge)) if not is_directed else edge
+            total_counts[canonical_edge] = total_counts.get(canonical_edge, 0) + count
+
+    # 全局归一化
+    if n > 2:
+        scale = 1.0 / ((n - 1) * (n - 2))
+        if not is_directed:
+            scale *= 2
+
+        for edge in total_counts:
+            total_counts[edge] *= scale
+
+    return total_counts

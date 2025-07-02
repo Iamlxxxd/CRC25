@@ -24,7 +24,8 @@ from my_demo.search.Operator import Operator
 from my_demo.search.saturated_search.ProblemNode import ProblemNode
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
-from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string, extract_nodes
+from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string, extract_nodes, \
+    calc_bc
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 from my_demo.visual import visual_sub_problem, visual_map_foil_modded
 from my_demo.search.TrackedCounter import TrackedCounter
@@ -55,7 +56,9 @@ class SearchSolverSaturated(SearchSolver):
         root_problem.calc_error()
 
         # 可以考虑计算topN
-        org_bc_dict = nx.edge_betweenness_centrality(root_problem.new_graph)
+        bc_start_time = time.time()
+        org_bc_dict = nx.edge_betweenness_centrality(root_problem.new_graph,k=1540)
+        print("bc cost time", time.time() - bc_start_time)
 
         # 使用 PriorityQueue 构建优先队列
         open_queue = PriorityQueue()
@@ -96,7 +99,7 @@ class SearchSolverSaturated(SearchSolver):
 
             info = list(problem.data_holder.foil_fact_fork_merge_nodes.values())[0]
             df_path_fact = self.generate_sub_fact(info)
-            modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem.new_graph, df_path_fact,
+            modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem, df_path_fact,
                                                                            org_bc_dict)
 
             print(problem)
@@ -104,8 +107,6 @@ class SearchSolverSaturated(SearchSolver):
                 # todo 这里不可能不命中，至少起点和终点是一样的
                 sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
                                           problem.idx_gen, problem.level + 1)
-
-
 
                 if sub_problem in closed_set:
                     continue
@@ -161,7 +162,7 @@ class SearchSolverSaturated(SearchSolver):
 
         return False
 
-    def calculate_acceptance_probability(self, problem, max_level=50):
+    def calculate_acceptance_probability(self, problem, max_level=10):
         """
         计算接受当前解的概率，随着层数增加，不接受差解的概率增大。
 
@@ -181,7 +182,7 @@ class SearchSolverSaturated(SearchSolver):
         if max_level == problem.level:
             acceptance_probability = 0
         else:
-            acceptance_probability = math.exp((-delta*50) / (max_level - problem.level))
+            acceptance_probability = math.exp((-delta) / (max_level - problem.level))
 
         # 将概率限制在[0, 1]范围内
         acceptance_probability = max(0, min(1, acceptance_probability))

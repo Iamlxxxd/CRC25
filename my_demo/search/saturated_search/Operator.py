@@ -23,7 +23,7 @@ def do_foil_must_be_feasible(root_solver) -> List[tuple]:
     return modified_arc_list
 
 
-def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, org_bc_dict=None) -> List[tuple]:
+def generate_multi_modify_arc_by_graph_feature(solver, info, problem, df_path_fact, org_bc_dict=None) -> List[tuple]:
     """
     Args:
         father_problem:
@@ -32,6 +32,7 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, or
     """
     id_point_map = solver.data_holder.id_point_map
 
+    G = problem.new_graph
     deg_cent = nx.degree_centrality(G)
     if org_bc_dict is None:
         edge_bc = nx.edge_betweenness_centrality(G)
@@ -91,10 +92,21 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, G, df_path_fact, or
     # 按分数降序排序，取topN
     arc_scores.sort(key=lambda x: x[1], reverse=True)
     result = []
-    for arc_id, _ in arc_scores[:4]:
+    for arc_id, _ in arc_scores[:adaptive_node_expansion(problem.level)]:
         result.append((arc_id, ArcModifyTag.TO_INFE))
 
     return result
+
+
+def adaptive_node_expansion(problem_level, base_expand_count=2):
+    """根据搜索深度动态调整扩展节点数"""
+    if problem_level < 3:
+        return min(base_expand_count * 2, 6)  # 前期多扩展
+    elif problem_level < 6:
+        return base_expand_count  # 中期正常扩展
+    else:
+        #不一定能找到解
+        return max(base_expand_count // 2, 1)
 
 
 def calculate_alt_ratio(u, v, G, row, weight='dijkstra'):

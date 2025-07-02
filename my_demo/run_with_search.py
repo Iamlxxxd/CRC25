@@ -9,17 +9,19 @@ import os
 import random
 import sys
 import pickle
+from datetime import time
 
 import numpy as np
 import yaml
 from pyinstrument import Profiler
+
 from my_demo.config import Config
 from my_demo.mip.ModelSolver import ModelSolver
 from my_demo.search.SearchSolver import SearchSolver
 from my_demo.search.saturated_search.SearchSolverSaturated import SearchSolverSaturated
 import gc
 import concurrent.futures
-
+import time
 sys.path.append("..")
 from my_demo.solver.DESolver import DESolver
 from visual import visual_line, visual_map, visual_map_foil_modded
@@ -91,6 +93,8 @@ if __name__ == "__main__":
     profiler = Profiler()
     profiler.start()
     # batch_main()
+    start_time = time.time()
     single_main()
+    print("ALL DONE cost time:", time.time() - start_time)
     profiler.stop()
     profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
