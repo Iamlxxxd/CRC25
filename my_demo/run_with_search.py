@@ -92,8 +92,9 @@ def batch_main():
 if __name__ == "__main__":
     profiler = Profiler()
     profiler.start()
-    # batch_main()
+
     start_time = time.time()
+    # batch_main()
     single_main()
     print("ALL DONE cost time:", time.time() - start_time)
     profiler.stop()

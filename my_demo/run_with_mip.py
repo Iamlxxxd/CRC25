@@ -71,7 +71,7 @@ def run_for_route_wrapper(args):
         return (route_name, "DONE")
     except Exception as e:
         return (route_name, f"Error: {e}")
-#todo 不知道为什么pulp跑批量 后面的模型会继承前面模型的约束  改成多进程也不行
+
 def batch_main():
     set_seed()
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -153,13 +153,13 @@ def single_main():
     # 初始化DataLoader，传入base_dir
     config = Config(config, base_dir=base_dir)
 
-    # solver = PulpModelSolver(config)
-    solver = ScipyModelSolver(config)
+    solver = PulpModelSolver(config)
+    # solver = ScipyModelSolver(config)
     # solver = ModelSolver(config)
     solver.init_model()
     solver.solve_model()
-    with open(f'{base_dir}/solver.pk', 'wb') as file:
-        pickle.dump([solver,config], file, protocol=pickle.HIGHEST_PROTOCOL)
+    # with open(f'{base_dir}/solver.pk', 'wb') as file:
+    #     pickle.dump([solver,config], file, protocol=pickle.HIGHEST_PROTOCOL)
     # solver_copy = deep_copy_serialization(solver)
     solver.process_solution_from_model()
 
@@ -171,8 +171,8 @@ def single_main():
 
     # visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"),config.route_name)
-    varify_df = modify_recovery_varify(solver,config,base_dir)
-    varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
+    # varify_df = modify_recovery_varify(solver,config,base_dir)
+    # varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
     print("DONE")
 
 def modify_recovery_varify(solver_modified,config, base_dir):
@@ -231,8 +231,8 @@ def deep_copy_serialization(obj):
 if __name__ == "__main__":
     # profiler = Profiler()
     # profiler.start()
-    # batch_main()
+    batch_main()
     # batch_run_compare()
-    single_main()
+    # single_main()
     # profiler.stop()
     # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)

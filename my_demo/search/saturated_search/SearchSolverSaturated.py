@@ -25,7 +25,7 @@ from my_demo.search.saturated_search.ProblemNode import ProblemNode
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
 from utils.common_utils import set_seed, ensure_crs, correct_arc_direction, get_constraint_string, extract_nodes, \
-    calc_bc
+    edge_betweenness_to_target_multigraph
 from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 from my_demo.visual import visual_sub_problem, visual_map_foil_modded
 from my_demo.search.TrackedCounter import TrackedCounter
@@ -54,11 +54,6 @@ class SearchSolverSaturated(SearchSolver):
         root_problem.apply_modified_arc()
         root_problem.calc_sub_best()
         root_problem.calc_error()
-
-        # 可以考虑计算topN
-        bc_start_time = time.time()
-        org_bc_dict = nx.edge_betweenness_centrality(root_problem.new_graph,k=1540)
-        print("bc cost time", time.time() - bc_start_time)
 
         # 使用 PriorityQueue 构建优先队列
         open_queue = PriorityQueue()
@@ -99,6 +94,7 @@ class SearchSolverSaturated(SearchSolver):
 
             info = list(problem.data_holder.foil_fact_fork_merge_nodes.values())[0]
             df_path_fact = self.generate_sub_fact(info)
+            org_bc_dict = edge_betweenness_to_target_multigraph(problem.new_graph, self.data_holder.end_node_lc, self.heuristic_f)
             modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem, df_path_fact,
                                                                            org_bc_dict)
 

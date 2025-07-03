@@ -9,42 +9,42 @@ from collections import defaultdict
 
 
 class DataHolder:
-    all_nodes = []
-    features = ["curb_height_max", "obstacle_free_width_float"]
-    point_id_map = dict()
-    all_arcs = []
 
-    row_data = dict()
-
-    all_feasible_arcs = defaultdict(list)
-    all_infeasible_arcs = defaultdict(list)
-    all_feasible_both_way = defaultdict(list)
-    all_infeasible_both_way = defaultdict(list)
-
-    all_feasible_dir_arcs = defaultdict(list)
-    all_infeasible_dir_arcs = defaultdict(list)
-
-    M: float
-    visual_detail_info = dict()
-
-    """foil"""
-    foil_route_arcs = []
-
-    foil_must_feasible_arcs = []
-
-    """fact"""
-    fact_common_from_node_arcs = dict()
-    fact_common_to_node_arcs = dict()
-
-    foil_fact_fork_merge_nodes = dict()
-
-    start_node_id = 0
-    end_node_id = 0
-
-    start_node_lc = ()
-    end_node_lc = ()
     def __init__(self):
-        pass
+        self.all_nodes = []
+        self.features = ["curb_height_max", "obstacle_free_width_float"]
+        self.point_id_map = dict()
+        self.all_arcs = []
+
+        self.row_data = dict()
+
+        self.all_feasible_arcs = defaultdict(list)
+        self.all_infeasible_arcs = defaultdict(list)
+        self.all_feasible_both_way = defaultdict(list)
+        self.all_infeasible_both_way = defaultdict(list)
+
+        self.all_feasible_dir_arcs = defaultdict(list)
+        self.all_infeasible_dir_arcs = defaultdict(list)
+
+        self.M: float
+        self.visual_detail_info = dict()
+
+        """foil"""
+        self.foil_route_arcs = []
+
+        self.foil_must_feasible_arcs = []
+
+        """fact"""
+        self.fact_common_from_node_arcs = dict()
+        self.fact_common_to_node_arcs = dict()
+
+        self.foil_fact_fork_merge_nodes = dict()
+
+        self.start_node_id = 0
+        self.end_node_id = 0
+
+        self.start_node_lc = ()
+        self.end_node_lc = ()
 
     def get_row_info_by_arc(self, i, j):
         return self.row_data.get((i, j), self.row_data.get((j, i), None))

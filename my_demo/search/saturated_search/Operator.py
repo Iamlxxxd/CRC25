@@ -112,6 +112,8 @@ def adaptive_node_expansion(problem_level, base_expand_count=2):
 def calculate_alt_ratio(u, v, G, row, weight='dijkstra'):
     try:
         orig_weight = row['my_weight']
+        if orig_weight <= 0:
+            orig_weight = 1e-9
         edge_data = G.get_edge_data(u, v)
         G.remove_edge(u, v)
         try:

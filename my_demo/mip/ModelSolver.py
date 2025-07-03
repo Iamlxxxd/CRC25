@@ -14,6 +14,7 @@ from my_demo.mip.MipDataHolder import MipDataHolder
 from router import Router
 from utils.dataparser import create_network_graph, handle_weight, handle_weight_with_recovery
 from utils.common_utils import correct_arc_direction
+from utils.metrics import common_edges_similarity_route_df_weighted, get_virtual_op_list
 
 
 class ModelSolver:
@@ -294,6 +295,8 @@ class ModelSolver:
         _, _, self.df_best_route = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
         self.df_best_route = correct_arc_direction(self.df_best_route, self.data_holder.start_node,
                                                    self.data_holder.end_node)
+
+        self.calc_error()
         pass
 
     def fill_w_value_for_visual(self):
@@ -347,6 +350,21 @@ class ModelSolver:
                                                                                              -self.data_holder.M))
         self.data_holder.visual_detail_info["fact_cost"] = round(cost, 4)
         pass
+
+    def calc_error(self):
+        sub_op_list = get_virtual_op_list(self.weight_df, self.org_map_df,
+                                          self.config.user_model["attrs_variable_names"])
+        self.graph_error = len([op for op in sub_op_list if op[3] == "success"])
+
+        self.actual_route_error = 1 - common_edges_similarity_route_df_weighted(self.df_best_route, self.df_path_foil,
+                                                                                self.config.user_model[
+                                                                                    "attrs_variable_names"])
+
+        self.route_error = max(self.actual_route_error - self.config.user_model["route_error_threshold"], 0)
+
+        self.data_holder.visual_detail_info['graph_error'] =  self.graph_error
+        self.data_holder.visual_detail_info['route_error'] = self.route_error
+        self.data_holder.visual_detail_info['route_error_threshold'] = self.config.user_model["route_error_threshold"]
 
     def process_visual_data(self) -> dict:
 

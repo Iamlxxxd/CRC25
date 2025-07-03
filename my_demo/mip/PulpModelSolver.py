@@ -78,8 +78,8 @@ class PulpModelSolver(ModelSolver):
         self.model += obj, "obj"
 
     def solve_model(self, time_limit=3600, gap=0):
-        # solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
-        #                          logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
-        solver = pulp.HiGHS_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
-                                  logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
+        solver = pulp.GUROBI_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
+                                 logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
+        # solver = pulp.HiGHS_CMD(gapRel=gap, timeLimit=time_limit, keepFiles=False,
+        #                           logPath=os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
         self.model.solve(solver)
