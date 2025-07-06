@@ -7,7 +7,6 @@ from collections import defaultdict
 
 import numpy as np
 from scipy.optimize import linprog
-from scipy.sparse import dok_matrix
 
 from my_demo.config import Config
 from my_demo.mip.ModelSolver import ModelSolver
@@ -16,14 +15,13 @@ from my_demo.mip.ModelSolver import ModelSolver
 class ScipyModelSolver(ModelSolver):
     def __init__(self, config: Config):
         super().__init__(config)
-        self.big_m = self.data_holder.M
+        self.big_m = self.data_holder.M * 4
 
     def init_model(self):
         # ========== 1. 变量索引映射 ==========
         nodes = sorted(self.data_holder.all_nodes)
         arcs = sorted(self.data_holder.all_arcs)  # 所有有向弧
-        # 是否整数变量
-        var_type = []
+
         # 创建索引映射
         var_index = {}
         idx = 0
@@ -31,7 +29,6 @@ class ScipyModelSolver(ModelSolver):
         # w_i 变量
         w_index = {node: idx for idx, node in enumerate(nodes)}
         idx += len(nodes)
-        var_type+=[0]*len(nodes)
 
         # x_ij 变量
         x_index = {}
@@ -39,7 +36,6 @@ class ScipyModelSolver(ModelSolver):
             var_index[('x', arc)] = idx
             x_index[arc] = idx
             idx += 1
-        var_type += [1] * len(arcs)
 
         # y_ij 变量
         y_index = {}
@@ -47,7 +43,6 @@ class ScipyModelSolver(ModelSolver):
             var_index[('y', arc)] = idx
             y_index[arc] = idx
             idx += 1
-        var_type += [1] * len(arcs)
 
         total_vars = idx
         self.var_index = var_index
@@ -75,48 +70,29 @@ class ScipyModelSolver(ModelSolver):
         bounds.extend([(0, 1)] * len(arcs))
 
         # ========== 4. 约束构建 ==========
-        # A_ub = []  # 不等式约束矩阵
-        A_ub = dok_matrix((len(arcs) + len(self.data_holder.foil_route_arcs), total_vars))
+        A_ub = []  # 不等式约束矩阵
         b_ub = []  # 不等式右侧向量
-        # A_eq = []  # 等式约束矩阵
-
-        num_fe_symmetry = sum(1  for group in self.data_holder.all_feasible_both_way.values() for (i, j) in group)
-        num_in_symmetry = sum(1  for group in self.data_holder.all_infeasible_both_way.values() for (i, j) in group)
-        num_unchange = sum(1 for (i, j) in self.data_holder.all_arcs if not self.get_row_info_by_arc(i, j)['modify_able_path_type'])
-        total_constrs = len(self.data_holder.foil_route_arcs) + 2 * num_fe_symmetry +2*num_in_symmetry+ num_unchange
-        A_eq = dok_matrix((total_constrs, total_vars))
+        A_eq = []  # 等式约束矩阵
         b_eq = []  # 等式右侧向量
 
         # (1) 最短路径约束 (所有弧)
-        A_ub_idx = 0
-        A_eq_idx = 0
         for (i, j) in arcs:
             row = self.get_row_info_by_arc(i, j)
             c_ij = row['c']
             d_ij = row['d']
 
-            # # 初始化约束行
-            # cons = np.zeros(total_vars)
-            # # w_j - w_i 项
-            # cons[w_index[j]] = 1
-            # cons[w_index[i]] = -1
-            # # -d_ij * x_ij 项
-            # cons[x_index[(i, j)]] = -d_ij
-            # # -big_m * y_ij 项
-            # cons[y_index[(i, j)]] = self.big_m
-            #
-            # A_ub.append(cons)
-
+            # 初始化约束行
+            cons = np.zeros(total_vars)
             # w_j - w_i 项
-            A_ub[A_ub_idx, w_index[j]] = 1
-            A_ub[A_ub_idx, w_index[i]] = -1
+            cons[w_index[j]] = 1
+            cons[w_index[i]] = -1
             # -d_ij * x_ij 项
-            A_ub[A_ub_idx, x_index[(i, j)]] = -d_ij
+            cons[x_index[(i, j)]] = -d_ij
             # -big_m * y_ij 项
-            A_ub[A_ub_idx, y_index[(i, j)]] = self.big_m
+            cons[y_index[(i, j)]] = self.big_m
 
+            A_ub.append(cons)
             b_ub.append(c_ij + self.big_m)
-            A_ub_idx += 1
 
         # (2) Foil路径约束 (特定弧)
         for (i, j) in self.data_holder.foil_route_arcs:
@@ -124,112 +100,73 @@ class ScipyModelSolver(ModelSolver):
             c_ij = row['c']
             d_ij = row['d']
 
-            # # 约束1: y_ij = 1 (等式)
-            # cons_eq = np.zeros(total_vars)
-            # cons_eq[y_index[(i, j)]] = 1
-            # A_eq.append(cons_eq)
-
             # 约束1: y_ij = 1 (等式)
-            A_eq[A_eq_idx, y_index[(i, j)]] = 1
+            cons_eq = np.zeros(total_vars)
+            cons_eq[y_index[(i, j)]] = 1
+            A_eq.append(cons_eq)
             b_eq.append(1)
 
-            # # 约束2: 势能不等式
-            # cons_ub = np.zeros(total_vars)
-            # # w_i - w_j 项
-            # cons_ub[w_index[i]] = 1
-            # cons_ub[w_index[j]] = -1
-            # # d_ij * x_ij 项
-            # cons_ub[x_index[(i, j)]] = d_ij
-            # # big_m * y_ij 项
-            # cons_ub[y_index[(i, j)]] = self.big_m
-            #
-            # A_ub.append(cons_ub)
-
+            # 约束2: 势能不等式
+            cons_ub = np.zeros(total_vars)
             # w_i - w_j 项
-            A_ub[A_ub_idx, w_index[i]] = 1
-            A_ub[A_ub_idx, w_index[j]] = -1
+            cons_ub[w_index[i]] = 1
+            cons_ub[w_index[j]] = -1
             # d_ij * x_ij 项
-            A_ub[A_ub_idx, x_index[(i, j)]] = d_ij
+            cons_ub[x_index[(i, j)]] = d_ij
             # big_m * y_ij 项
-            A_ub[A_ub_idx, y_index[(i, j)]] = self.big_m
+            cons_ub[y_index[(i, j)]] = self.big_m
 
+            A_ub.append(cons_ub)
             b_ub.append(self.big_m - c_ij)
-            A_ub_idx += 1
-            A_eq_idx += 1
 
         # (3) 无向边对称约束
         for group in self.data_holder.all_feasible_both_way.values():
             for (i, j) in group:
-                # # x_ij = x_ji
-                # cons_x = np.zeros(total_vars)
-                # cons_x[x_index[(i, j)]] = 1
-                # cons_x[x_index[(j, i)]] = -1
-                # A_eq.append(cons_x)
-
                 # x_ij = x_ji
-                A_eq[A_eq_idx, x_index[(i, j)]] = 1
-                A_eq[A_eq_idx, x_index[(j, i)]] = -1
+                cons_x = np.zeros(total_vars)
+                cons_x[x_index[(i, j)]] = 1
+                cons_x[x_index[(j, i)]] = -1
+                A_eq.append(cons_x)
                 b_eq.append(0)
-                A_eq_idx += 1
-
-                # # y_ij = y_ji
-                # cons_y = np.zeros(total_vars)
-                # cons_y[y_index[(i, j)]] = 1
-                # cons_y[y_index[(j, i)]] = -1
-                # A_eq.append(cons_y)
 
                 # y_ij = y_ji
-                A_eq[A_eq_idx, y_index[(i, j)]] = 1
-                A_eq[A_eq_idx, y_index[(j, i)]] = -1
+                cons_y = np.zeros(total_vars)
+                cons_y[y_index[(i, j)]] = 1
+                cons_y[y_index[(j, i)]] = -1
+                A_eq.append(cons_y)
                 b_eq.append(0)
-                A_eq_idx += 1
         for group in self.data_holder.all_infeasible_both_way.values():
             for (i, j) in group:
-                # # x_ij = x_ji
-                # cons_x = np.zeros(total_vars)
-                # cons_x[x_index[(i, j)]] = 1
-                # cons_x[x_index[(j, i)]] = -1
-                # A_eq.append(cons_x)
-
                 # x_ij = x_ji
-                A_eq[A_eq_idx, x_index[(i, j)]] = 1
-                A_eq[A_eq_idx, x_index[(j, i)]] = -1
+                cons_x = np.zeros(total_vars)
+                cons_x[x_index[(i, j)]] = 1
+                cons_x[x_index[(j, i)]] = -1
+                A_eq.append(cons_x)
                 b_eq.append(0)
-                A_eq_idx += 1
-
-                # # y_ij = y_ji
-                # cons_y = np.zeros(total_vars)
-                # cons_y[y_index[(i, j)]] = 1
-                # cons_y[y_index[(j, i)]] = -1
-                # A_eq.append(cons_y)
 
                 # y_ij = y_ji
-                A_eq[A_eq_idx, y_index[(i, j)]] = 1
-                A_eq[A_eq_idx, y_index[(j, i)]] = -1
+                cons_y = np.zeros(total_vars)
+                cons_y[y_index[(i, j)]] = 1
+                cons_y[y_index[(j, i)]] = -1
+                A_eq.append(cons_y)
                 b_eq.append(0)
-                A_eq_idx += 1
 
         # (4) 不可修改约束
         for (i, j) in self.data_holder.all_arcs:
             row = self.get_row_info_by_arc(i, j)
             if not row['modify_able_path_type']:
-                # cons = np.zeros(total_vars)
-                # cons[x_index[(i, j)]] = 1
-                # A_eq.append(cons)
-                A_eq[A_eq_idx, x_index[(i, j)]] = 1
+                cons = np.zeros(total_vars)
+                cons[x_index[(i, j)]] = 1
+                A_eq.append(cons)
                 b_eq.append(0)
-                A_eq_idx += 1
 
         # ========== 5. 保存约束矩阵 ==========
-        # self.A_ub = np.array(A_ub) if A_ub else None
-        self.A_ub = A_ub
+        self.A_ub = np.array(A_ub) if A_ub else None
         self.b_ub = np.array(b_ub) if b_ub else None
-        self.A_eq = A_eq
+        self.A_eq = np.array(A_eq) if A_eq else None
         self.b_eq = np.array(b_eq) if b_eq else None
         self.c = c
         self.bounds = bounds
-        self.var_type = var_type
-        print(self.A_ub.shape)
 
     def solve_model(self, time_limit=3600, gap=0):
         opt = {'disp': True}
@@ -242,10 +179,8 @@ class ScipyModelSolver(ModelSolver):
             b_eq=self.b_eq,
             bounds=self.bounds,
             method='highs',  # HiGHS 求解器
-            integrality=self.var_type,
             options=opt
         )
-
         if not result.success:
             raise RuntimeError(f"求解失败: {result.message}")
 
@@ -293,7 +228,7 @@ class ScipyModelSolver(ModelSolver):
                     continue
                 if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
                     continue
-                # if value >=0.9:
+                # if value.varValue >0.99999:
                 if value == 1:
                     self.modify_df_arc_with_attr(i, j, "to_fe")
                 else:
@@ -307,7 +242,7 @@ class ScipyModelSolver(ModelSolver):
                     continue
                 if (i, j) in type_modify_mark or (j, i) in type_modify_mark:
                     continue
-                if value ==1:
+                if value == 1:
                     self.modify_df_arc_with_attr(i, j, "change")
                     type_modify_mark.add((i, j))
 

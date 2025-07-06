@@ -17,6 +17,7 @@ import pandas as pd
 import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
+from my_demo.mip.LpModelSolver import LpModelSolver
 from my_demo.mip.MipDataHolder import MipDataHolder
 from my_demo.mip.ModelSolver import ModelSolver
 from my_demo.mip.PulpModelSolver import PulpModelSolver
@@ -171,8 +172,8 @@ def single_main():
 
     # visual_map_explore(visual_data, os.path.join(base_dir, "my_demo", "output", "visual"))
     visual_map_foil_modded(visual_data, os.path.join(base_dir, "my_demo", "output", "visual_batch"),config.route_name)
-    varify_df = modify_recovery_varify(solver,config,base_dir)
-    varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
+    # varify_df = modify_recovery_varify(solver,config,base_dir)
+    # varify_df.to_csv(os.path.join(base_dir, "my_demo", "output", "visual_batch", "recovery_varify.csv"))
     print("DONE")
 
 def modify_recovery_varify(solver_modified,config, base_dir):
