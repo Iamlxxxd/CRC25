@@ -17,6 +17,7 @@ import pandas as pd
 import yaml
 from pyinstrument import Profiler
 from my_demo.config import Config
+from my_demo.mip.LpModelSolver import LpModelSolver
 from my_demo.mip.MipDataHolder import MipDataHolder
 from my_demo.mip.ModelSolver import ModelSolver
 from my_demo.mip.PulpModelSolver import PulpModelSolver

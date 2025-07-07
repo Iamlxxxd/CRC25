@@ -1,6 +1,6 @@
 paths:
-  route_name: osdpm_3_1 # 指定routes下的文件夹名
-  #osdpm_0_3 osdpm_0_2 osdpm_0_5
+  route_name: osdpm_0_3 # 指定routes下的文件夹名
+  #osdpm_0_3 osdpm_0_2 osdpm_0_5 osdpm_4_1
   store_path: outputs/
 
 params:

@@ -161,7 +161,7 @@ class ModelSolver:
         # 路径类型是不是能改
         df['modify_able_path_type'] = (df["path_type"] == "walk") | (df["path_type"] == "bike")
 
-        # df['curb_height_max'].fillna(0,inplace=True)
+        df['curb_height_max'].fillna(0,inplace=True)
         # 高度不能改 或者满足条件
         df['curb_height_max_include'] = (df
                                          .apply(lambda x:
@@ -234,7 +234,7 @@ class ModelSolver:
                     continue
                 if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
                     continue
-                # if value.varValue >0.99999:
+                # if value.varValue >0.99:
                 if value.varValue == 1:
                     self.modify_df_arc_with_attr(i, j, "to_fe")
                 else:
