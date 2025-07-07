@@ -97,17 +97,18 @@ class ModelSolver:
                 for attr_name in self.data_holder.features:
                     ez_attr = self.eazy_name_map[attr_name]
                     if row[f"{attr_name}_include"]:
-                        self.data_holder.all_feasible_both_way[ez_attr].append((node1, node2))
 
                         self.data_holder.all_feasible_arcs[ez_attr].append((node1, node2))
                         if node1 != node2:
                             self.data_holder.all_feasible_arcs[ez_attr].append((node2, node1))
+                            self.data_holder.all_feasible_both_way[ez_attr].append((node1, node2))
+
                     else:
                         self.data_holder.all_infeasible_arcs[ez_attr].append((node1, node2))
                         if node1 != node2:
                             self.data_holder.all_infeasible_arcs[ez_attr].append((node2, node1))
 
-                        self.data_holder.all_infeasible_both_way[ez_attr].append((node1, node2))
+                            self.data_holder.all_infeasible_both_way[ez_attr].append((node1, node2))
             else:
                 self.data_holder.all_arcs.append((node1, node2))
                 for attr_name in self.data_holder.features:
