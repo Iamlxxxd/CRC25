@@ -87,25 +87,13 @@ class ScipyModelSolver(ModelSolver):
         A_eq = dok_matrix((total_constrs, total_vars))
         b_eq = []  # 等式右侧向量
 
-        # (1) 最短路径约束 (所有弧)
+        # (1) Shortest Path Constraints
         A_ub_idx = 0
         A_eq_idx = 0
         for (i, j) in arcs:
             row = self.get_row_info_by_arc(i, j)
             c_ij = row['c']
             d_ij = row['d']
-
-            # # 初始化约束行
-            # cons = np.zeros(total_vars)
-            # # w_j - w_i 项
-            # cons[w_index[j]] = 1
-            # cons[w_index[i]] = -1
-            # # -d_ij * x_ij 项
-            # cons[x_index[(i, j)]] = -d_ij
-            # # -big_m * y_ij 项
-            # cons[y_index[(i, j)]] = self.big_m
-            #
-            # A_ub.append(cons)
 
             # w_j - w_i 项
             A_ub[A_ub_idx, w_index[j]] = 1
@@ -118,33 +106,17 @@ class ScipyModelSolver(ModelSolver):
             b_ub.append(c_ij + self.big_m)
             A_ub_idx += 1
 
-        # (2) Foil路径约束 (特定弧)
+        # foil route Shortest Path Constraints
         for (i, j) in self.data_holder.foil_route_arcs:
             row = self.get_row_info_by_arc(i, j)
             c_ij = row['c']
             d_ij = row['d']
 
-            # # 约束1: y_ij = 1 (等式)
-            # cons_eq = np.zeros(total_vars)
-            # cons_eq[y_index[(i, j)]] = 1
-            # A_eq.append(cons_eq)
-
-            # 约束1: y_ij = 1 (等式)
+            # foil route feasible
             A_eq[A_eq_idx, y_index[(i, j)]] = 1
             b_eq.append(1)
 
-            # # 约束2: 势能不等式
-            # cons_ub = np.zeros(total_vars)
-            # # w_i - w_j 项
-            # cons_ub[w_index[i]] = 1
-            # cons_ub[w_index[j]] = -1
-            # # d_ij * x_ij 项
-            # cons_ub[x_index[(i, j)]] = d_ij
-            # # big_m * y_ij 项
-            # cons_ub[y_index[(i, j)]] = self.big_m
-            #
-            # A_ub.append(cons_ub)
-
+            # foil route Shortest path
             # w_i - w_j 项
             A_ub[A_ub_idx, w_index[i]] = 1
             A_ub[A_ub_idx, w_index[j]] = -1
@@ -157,14 +129,22 @@ class ScipyModelSolver(ModelSolver):
             A_ub_idx += 1
             A_eq_idx += 1
 
-        # (3) 无向边对称约束
-        for group in self.data_holder.all_feasible_both_way.values():
-            for (i, j) in group:
-                # # x_ij = x_ji
-                # cons_x = np.zeros(total_vars)
-                # cons_x[x_index[(i, j)]] = 1
-                # cons_x[x_index[(j, i)]] = -1
-                # A_eq.append(cons_x)
+        # (3) Undirected Arc Constraint
+        for f, arcs in self.data_holder.all_feasible_both_way.items():
+            for i, j in arcs:
+                # x_ij = x_ji
+                A_eq[A_eq_idx, x_index[(i, j)]] = 1
+                A_eq[A_eq_idx, x_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
+
+                # y_ij = y_ji
+                A_eq[A_eq_idx, y_index[(i, j)]] = 1
+                A_eq[A_eq_idx, y_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
+        for f, arcs in self.data_holder.all_infeasible_both_way.items():
+            for i, j in arcs:
 
                 # x_ij = x_ji
                 A_eq[A_eq_idx, x_index[(i, j)]] = 1
@@ -172,50 +152,16 @@ class ScipyModelSolver(ModelSolver):
                 b_eq.append(0)
                 A_eq_idx += 1
 
-                # # y_ij = y_ji
-                # cons_y = np.zeros(total_vars)
-                # cons_y[y_index[(i, j)]] = 1
-                # cons_y[y_index[(j, i)]] = -1
-                # A_eq.append(cons_y)
-
-                # y_ij = y_ji
-                A_eq[A_eq_idx, y_index[(i, j)]] = 1
-                A_eq[A_eq_idx, y_index[(j, i)]] = -1
-                b_eq.append(0)
-                A_eq_idx += 1
-        for group in self.data_holder.all_infeasible_both_way.values():
-            for (i, j) in group:
-                # # x_ij = x_ji
-                # cons_x = np.zeros(total_vars)
-                # cons_x[x_index[(i, j)]] = 1
-                # cons_x[x_index[(j, i)]] = -1
-                # A_eq.append(cons_x)
-
-                # x_ij = x_ji
-                A_eq[A_eq_idx, x_index[(i, j)]] = 1
-                A_eq[A_eq_idx, x_index[(j, i)]] = -1
-                b_eq.append(0)
-                A_eq_idx += 1
-
-                # # y_ij = y_ji
-                # cons_y = np.zeros(total_vars)
-                # cons_y[y_index[(i, j)]] = 1
-                # cons_y[y_index[(j, i)]] = -1
-                # A_eq.append(cons_y)
-
                 # y_ij = y_ji
                 A_eq[A_eq_idx, y_index[(i, j)]] = 1
                 A_eq[A_eq_idx, y_index[(j, i)]] = -1
                 b_eq.append(0)
                 A_eq_idx += 1
 
-        # (4) 不可修改约束
+        # (4) can not modify path_type
         for (i, j) in self.data_holder.all_arcs:
             row = self.get_row_info_by_arc(i, j)
             if not row['modify_able_path_type']:
-                # cons = np.zeros(total_vars)
-                # cons[x_index[(i, j)]] = 1
-                # A_eq.append(cons)
                 A_eq[A_eq_idx, x_index[(i, j)]] = 1
                 b_eq.append(0)
                 A_eq_idx += 1
@@ -232,7 +178,11 @@ class ScipyModelSolver(ModelSolver):
         print(self.A_ub.shape)
 
     def solve_model(self, time_limit=3600, gap=0):
-        opt = {'disp': True}
+        opt = {'disp': True,
+               'mip_rel_gap':gap,
+               'time_limit':time_limit,
+               # 'log_file': str(os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
+               }
         # 注意: scipy 1.10 不支持时间限制和间隙控制
         result = linprog(
             c=self.c,
@@ -293,8 +243,7 @@ class ScipyModelSolver(ModelSolver):
                     continue
                 if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
                     continue
-                # if value >=0.9:
-                if value == 1:
+                if value >=0.99:
                     self.modify_df_arc_with_attr(i, j, "to_fe")
                 else:
                     self.modify_df_arc_with_attr(i, j, "to_infe")
@@ -307,7 +256,7 @@ class ScipyModelSolver(ModelSolver):
                     continue
                 if (i, j) in type_modify_mark or (j, i) in type_modify_mark:
                     continue
-                if value ==1:
+                if value >=0.99:
                     self.modify_df_arc_with_attr(i, j, "change")
                     type_modify_mark.add((i, j))
 
