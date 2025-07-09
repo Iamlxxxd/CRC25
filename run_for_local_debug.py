@@ -23,7 +23,7 @@ import argparse
 import json
 
 from config import Config
-from src.solver.SearchSolverSaturated import SearchSolverSaturated
+from src.solver.SearchSolver import SearchSolver
 from src.calc.common_utils import set_seed
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +56,8 @@ def single_main(route_name=None):
 
     config.load_from_yaml()
 
-    solver = SearchSolverSaturated(config)
+    solver = SearchSolver(config)
+    solver.init_from_config()
     solver.do_solve()
 
     solver.process_solution_from_model()

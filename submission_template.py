@@ -15,14 +15,14 @@ import argparse
 import json
 
 from config import Config
-from src.solver.SearchSolverSaturated import SearchSolverSaturated
+from src.solver.SearchSolver import SearchSolver
 from utils.dataparser import convert_op_list_to_wkt
 
 def get_results(args):
     config = Config()
     config.load_from_args(args)
 
-    solver = SearchSolverSaturated(config)
+    solver = SearchSolver(config)
     solver.do_solve()
 
     solver.process_solution_from_model()

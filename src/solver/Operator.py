@@ -6,12 +6,13 @@
 @project:    CRC25
 """
 
-
 import networkx as nx
 from typing import List
 import random
 
 from .ArcModifyTag import ArcModifyTag
+
+
 def do_foil_must_be_feasible(root_solver) -> List[tuple]:
     modified_arc_list = []
     for arc in root_solver.data_holder.foil_must_feasible_arcs:
@@ -28,6 +29,7 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, problem, df_path_fa
     Returns:
     """
     id_point_map = solver.data_holder.id_point_map
+    modify_arc_dict = solver.modify_arc_dict
 
     G = problem.new_graph
     deg_cent = nx.degree_centrality(G)
@@ -42,7 +44,10 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, problem, df_path_fa
     merge = (fact_id_route[-2], fact_id_route[-1])
     random_arc = random.choice([fork, merge])
 
-    # 先收集所有特征
+    # 检查modify_arc_dict是否有效
+    use_modify_dict_feature = modify_arc_dict is not None and len(modify_arc_dict) > 0
+
+    # 收集所有特征
     for idx, row in df_path_fact.iterrows():
         arc_id = row['arc']
         u, v = id_point_map.get(arc_id[0]), id_point_map.get(arc_id[1])
@@ -55,15 +60,24 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, problem, df_path_fa
         alt_ratio_score = calculate_alt_ratio(u, v, G, row, weight=solver.heuristic_f)
         # 特征4：是否为随机arc
         rand_score = 1.5 if arc_id == random_arc else 1
-        arc_feature_list.append({
+        # 特征5：是否在modify_arc_dict中
+        from_mip_score = 1.5 if (use_modify_dict_feature and arc_id in modify_arc_dict) else 1
+
+        feature_entry = {
             'arc_id': arc_id,
             'node_deg': node_deg_score,
             'edge_bc': edge_bc_score,
             'alt_ratio': alt_ratio_score,
             'fork_merge': rand_score
-        })
+        }
 
-    # 归一化（去除reverse参数和翻转逻辑）
+        # 添加新特征
+        if use_modify_dict_feature:
+            feature_entry['from_mip'] = from_mip_score
+
+        arc_feature_list.append(feature_entry)
+
+    # 归一化函数
     def normalize(feat_list, key):
         vals = [x[key] for x in feat_list]
         min_v, max_v = min(vals), max(vals)
@@ -71,27 +85,50 @@ def generate_multi_modify_arc_by_graph_feature(solver, info, problem, df_path_fa
             return [0.0 for _ in vals]
         return [(v - min_v) / (max_v - min_v) for v in vals]
 
+    # 归一化基础特征
     norm_deg = normalize(arc_feature_list, 'node_deg')
     norm_bc = normalize(arc_feature_list, 'edge_bc')
     norm_alt = normalize(arc_feature_list, 'alt_ratio')
     norm_rand = normalize(arc_feature_list, 'fork_merge')
 
+    # 归一化新特征（如果启用）
+    norm_from_mip = [0 for _ in range(len(norm_deg))]
+    if use_modify_dict_feature:
+        norm_from_mip = normalize(arc_feature_list, 'from_mip')
+
     arc_scores = []
     for i, feat in enumerate(arc_feature_list):
-        score = (
-                0.15 * norm_deg[i] +
-                0.35 * norm_bc[i] +
-                0.45 * norm_alt[i] +
-                0.05 * norm_rand[i]
-        )
+        if use_modify_dict_feature:
+            # 使用新权重分配（含新特征）
+            score = (
+                    0.1 * norm_deg[i] +
+                    0.2 * norm_bc[i] +
+                    0.3 * norm_alt[i] +
+                    0.05 * norm_rand[i] +
+                    0.35 * norm_from_mip[i]
+            )
+        else:
+            # 原始权重分配
+            score = (
+                    0.15 * norm_deg[i] +
+                    0.35 * norm_bc[i] +
+                    0.45 * norm_alt[i] +
+                    0.05 * norm_rand[i]
+            )
         arc_scores.append((feat['arc_id'], score))
 
     # 按分数降序排序，取topN
     arc_scores.sort(key=lambda x: x[1], reverse=True)
     result = []
     for arc_id, _ in arc_scores[:adaptive_node_expansion(problem.level)]:
-        result.append((arc_id, ArcModifyTag.TO_INFE))
+        modify_tag = ArcModifyTag.TO_INFE
+        if use_modify_dict_feature and arc_id in modify_arc_dict:
+            # 检查一下是否修改类型
+            mip_modify_tag = modify_arc_dict[arc_id]
+            if mip_modify_tag == ArcModifyTag.CHANGE:
+                modify_tag = mip_modify_tag
 
+        result.append((arc_id, modify_tag))
     return result
 
 
@@ -102,7 +139,7 @@ def adaptive_node_expansion(problem_level, base_expand_count=2):
     elif problem_level < 6:
         return base_expand_count  # 中期正常扩展
     else:
-        #不一定能找到解
+        # 不一定能找到解
         return max(base_expand_count // 2, 1)
 
 
