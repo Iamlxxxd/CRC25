@@ -23,7 +23,6 @@ import gc
 import concurrent.futures
 import time
 sys.path.append("..")
-from my_demo.solver.DESolver import DESolver
 from visual import visual_line, visual_map, visual_map_foil_modded
 
 

@@ -5,9 +5,11 @@
 @time   :    2025/5/30 11:12
 @project:    CRC25
 """
+import heapq
 import math
 import os
 import random
+from collections import defaultdict
 
 import numpy as np
 
@@ -129,22 +131,9 @@ def extract_nodes(df):
     return nodes
 
 
-import heapq
-from collections import defaultdict
-
 
 def edge_betweenness_to_target_multigraph(G, target, weight=None):
-    """
-        与NetworkX完全一致的边中介中心性计算（优化实现）
 
-        参数:
-        G: 多重有向图 (nx.MultiDiGraph)
-        target: 固定终点节点
-        weight: 边权重属性名 (None表示无权图)
-
-        返回:
-        dict: {(u, v, key): 中介中心性值} 的字典
-        """
     # 初始化数据结构
     dist = defaultdict(lambda: float('inf'))
     sigma = defaultdict(int)
