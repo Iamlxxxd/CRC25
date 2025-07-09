@@ -267,19 +267,19 @@ def solve_mip(config) -> GeoDataFrame:
     return modified_arcs
 
 
-# if __name__ == "__main__":
-#     # profiler = Profiler()
-#     # profiler.start()
-#     # batch_main()
-#     # batch_run_compare()
-#     single_main()
-#     # profiler.stop()
-#     # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
+if __name__ == "__main__":
+    # profiler = Profiler()
+    # profiler.start()
+    # batch_main()
+    # batch_run_compare()
+    single_main()
+    # profiler.stop()
+    # profiler.write_html("/Users/lvxiangdong/Desktop/work/some_project/CRC25/my_demo/output/visual/profiler.html",show_all=True)
 
-if __name__ == '__main__':
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_dir, "config.yaml")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    modified_arcs = solve_mip(config)
-    print(modified_arcs)
+# if __name__ == '__main__':
+#     current_dir = os.path.dirname(os.path.abspath(__file__))
+#     config_path = os.path.join(current_dir, "config.yaml")
+#     with open(config_path, 'r', encoding='utf-8') as f:
+#         config = yaml.safe_load(f)
+#     modified_arcs = solve_mip(config)
+#     print(modified_arcs)

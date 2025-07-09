@@ -1,38 +1,30 @@
-# encoding:utf-8
-"""
-@email  :    lvxiangdong2qq@163.com
-@auther :    XiangDongLv
-@time   :    2025/6/25 10:56
-@project:    CRC25
-"""
-import os
-import sys
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 2025/6/29 17:43
+# @Author  : JunhaoShi(01387247)
+# @Desc    :
+
+from collections import defaultdict
 from copy import deepcopy
-from geopandas import GeoDataFrame
-import geopandas as gpd
-import pandas as pd
+
 import numpy as np
-from queue import PriorityQueue
-import time
-import random
-import math
+import pandas as pd
+from geopandas import GeoDataFrame
+from scipy.optimize import linprog
+from scipy.sparse import dok_matrix
 from shapely import to_wkt
 
-from config import Config
+from my_demo.config import Config
 from src.DataHolder import DataHolder
-from src.calc.router import Router
-from src.calc.DataAnalyzer import DataAnalyzer
-from src.solver.ProblemNode import ProblemNode
-from src.calc.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
-from src.calc.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph
-from src.solver.ArcModifyTag import ArcModifyTag
-from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
-from src.TrackedCounter import TrackedCounter
-from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
+from src.calc.common_utils import correct_arc_direction
 from src.calc.dataparser import convert
+from src.calc.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
+from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
+from src.calc.router import Router
+from src.solver.ArcModifyTag import ArcModifyTag
 
 
-class SearchSolverSaturated:
+class MipSolver:
     heuristic_f = 'my_weight'
     heuristic = "dijkstra"
 
@@ -48,10 +40,8 @@ class SearchSolverSaturated:
         self.load_basic_data()
         self.data_process()
 
-        self.analyzer = DataAnalyzer(self)
-
-        self.best_leaf_node: ProblemNode = None
-        self.current_best: ProblemNode = None
+        self.mip_modify_arc_list = []
+        self.big_m = self.data_holder.M
 
     def load_basic_data(self):
         self.org_map_df = self.config.basic_network
@@ -247,24 +237,30 @@ class SearchSolverSaturated:
     def get_row_info_by_arc(self, i, j):
         return self.data_holder.row_data.get((i, j), self.data_holder.row_data.get((j, i), None))
 
-    def process_solution_from_model(self):
-        self.current_solution_map = self.best_leaf_node.map_df
-        print(self.best_leaf_node.inherit)
-        self.get_best_route_df_from_solution()
-        self.calc_error()
+    def process_solution_from_model(self, exclude_arcs=None):
+        if exclude_arcs is None:
+            exclude_arcs = []
+        self.save_modify_arc_from_mip(exclude_arcs)
+        self.apply_mip_modified_arc()
 
+        self.get_best_route_df_from_solution()
+        self.data_holder.final_weight = self.current_solution_map.set_index("arc").to_dict()['my_weight']
+        self.fill_w_value_for_visual()
+
+        self.calc_error()
         self.out_put_op_list = self.sub_op_list
         self.out_put_df = self.current_solution_map[self.org_df_from_io.columns]
 
     def get_best_route_df_from_solution(self):
         self.current_solution_map = handle_weight_with_recovery(self.current_solution_map, self.config.user_model)
 
-        _, self.new_graph = create_network_graph(self.current_solution_map)
+        _, best_graph = create_network_graph(self.current_solution_map)
 
-        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(self.new_graph, self.config.gdf_coords_loaded)
-        _, _, self.df_path_best = self.router.get_route(self.new_graph, origin_node, dest_node, self.heuristic_f)
+        origin_node, dest_node, _, _, _ = self.router.set_o_d_coords(best_graph, self.config.gdf_coords_loaded)
+        _, _, self.df_path_best = self.router.get_route(best_graph, origin_node, dest_node, self.heuristic_f)
         self.df_path_best = correct_arc_direction(self.df_path_best, self.data_holder.start_node_id,
                                                   self.data_holder.end_node_id)
+
         pass
 
     def calc_error(self):
@@ -283,7 +279,55 @@ class SearchSolverSaturated:
         self.data_holder.visual_detail_info['route_error'] = route_error
         self.data_holder.visual_detail_info['route_error_threshold'] = self.config.user_model["route_error_threshold"]
 
-    def modify_df_arc_with_attr(self, i, j, tag: ArcModifyTag, attr_name=None):
+    def save_modify_arc_from_mip(self, exclude_arcs=None):
+        if exclude_arcs is None:
+            exclude_arcs = []
+
+        feature_modify_mark = set()
+        for i, j_dict in self.y.items():
+            for j, value in j_dict.items():
+                if (i, j) in exclude_arcs or (j, i) in exclude_arcs:
+                    continue
+                if (i, j) in feature_modify_mark or (j, i) in feature_modify_mark:
+                    continue
+
+                row = self.get_row_info_by_arc(i, j)
+                if row is None:
+                    continue
+                if value >= 0.99:
+                    if row['include'] < 1:
+                        # 原来不可行 但是改成可行
+                        self.mip_modify_arc_list.append(((i, j), ArcModifyTag.TO_FE))
+                else:
+                    if row['include'] > 0:
+                        # 原来可行 但是改成不可行
+                        self.mip_modify_arc_list.append(((i, j), ArcModifyTag.TO_INFE))
+                feature_modify_mark.add((i, j))
+
+        type_modify_mark = set()
+        for i, j_dict in self.x.items():
+            for j, value in j_dict.items():
+                if (i, j) in exclude_arcs or (j, i) in exclude_arcs:
+                    continue
+                if (i, j) in type_modify_mark or (j, i) in type_modify_mark:
+                    continue
+
+                row = self.get_row_info_by_arc(i, j)
+                if row is None:
+                    continue
+
+                if value >= 0.99:
+                    self.mip_modify_arc_list.append(((i, j), ArcModifyTag.CHANGE))
+                    type_modify_mark.add((i, j))
+
+    def apply_mip_modified_arc(self):
+        for (i, j), modify_tag in self.mip_modify_arc_list:
+            modified_row = self.modify_df_arc_with_attr(i, j, modify_tag)
+            solution_row = self.current_solution_map.loc[modified_row.name]
+            modified_row['modified'] = modified_row['modified'] + solution_row['modified']
+            self.current_solution_map.loc[modified_row.name] = modified_row
+
+    def modify_df_arc_with_attr(self, i, j, tag, attr_name=None):
         row = self.get_row_info_by_arc(i, j)
         modified_list = []
 
@@ -311,24 +355,58 @@ class SearchSolverSaturated:
             row['modified'] = row['modified'] + modified_list
 
         return row
-        # self.data_holder.row_data.update({(i, j): row})
-        # self.org_map_df.loc[row.name] = row
 
+    def fill_w_value_for_visual(self):
+        self.current_solution_map['w_i'] = 0
+        self.current_solution_map['w_j'] = 0
+        self.current_solution_map['y_ij'] = 0
 
+        for idx, row in self.current_solution_map.iterrows():
+            arc = row['arc']
+            self.current_solution_map.at[row.name, "w_i"] = self.w[arc[0]]
+            self.current_solution_map.at[row.name, "w_j"] = self.w[arc[1]]
+            self.current_solution_map.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]]
 
-    def process_data_for_root_problem(self):
-        # todo 把根节点当子问题 方便递归修正 未完成
-        fork = self.data_holder.start_node_id
-        merge = self.data_holder.end_node_id
-        foil_sub_path = extract_nodes(self.df_path_foil)
-        fact_sub_path = extract_nodes(self.df_path_fact)
+        self.df_path_foil['w_i'] = 0
+        self.df_path_foil['w_j'] = 0
+        self.df_path_foil['y_ij'] = 0
 
-        # info = self.process_data_for_root_problem()
-        # root_problem = SubProblem(self, info, self.current_solution_map, self.org_graph, None, counter)
-        return {'fork': fork,
-                'merge': merge,
-                'foil_sub_path': foil_sub_path,
-                'fact_sub_path': fact_sub_path}
+        cost = 0
+        for idx, row in self.df_path_foil.iterrows():
+            arc = row['arc']
+            self.df_path_foil.at[row.name, "w_i"] = self.w[arc[0]]
+            self.df_path_foil.at[row.name, "w_j"] = self.w[arc[1]]
+            self.df_path_foil.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]]
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["foil_cost"] = round(cost, 4)
+
+        self.df_path_best['w_i'] = 0
+        self.df_path_best['w_j'] = 0
+        self.df_path_best['y_ij'] = 0
+        cost = 0
+        for idx, row in self.df_path_best.iterrows():
+            arc = row['arc']
+            self.df_path_best.at[row.name, "w_i"] = self.w[arc[0]]
+            self.df_path_best.at[row.name, "w_j"] = self.w[arc[1]]
+            self.df_path_best.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]]
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["best_cost"] = round(cost, 4)
+
+        self.df_path_fact['w_i'] = 0
+        self.df_path_fact['w_j'] = 0
+        self.df_path_fact['y_ij'] = 0
+        cost = 0
+        for idx, row in self.df_path_fact.iterrows():
+            arc = row['arc']
+            self.df_path_fact.at[row.name, "w_i"] = self.w[arc[0]]
+            self.df_path_fact.at[row.name, "w_j"] = self.w[arc[1]]
+            self.df_path_fact.at[row.name, "y_ij"] = self.y[arc[0]][arc[1]]
+            cost += self.data_holder.final_weight.get(arc, self.data_holder.final_weight.get((arc[1], arc[0]),
+                                                                                             -self.data_holder.M))
+        self.data_holder.visual_detail_info["fact_cost"] = round(cost, 4)
+        pass
 
     def process_visual_data(self) -> dict:
 
@@ -338,148 +416,221 @@ class SearchSolverSaturated:
                 "meta_map": self.meta_map,
                 "df_path_fact": self.df_path_fact,
                 "df_path_foil": self.df_path_foil,
-                "best_route": self.df_path_best,
-                "org_map_df": self.current_solution_map,
+                "best_route": self.df_best_route,
+                "org_map_df": self.org_map_df,
                 "config": self.config,
                 "data_holder": self.data_holder,
                 "show_data": self.data_holder.visual_detail_info}
 
-    def do_solve(self):
-        self.analyzer.do_basic_analyze()
-        # 这里把foil的不可行变成可行 存到了current_solution_map里
-        foil_must_be_feasible_arc = do_foil_must_be_feasible(self)
+    def init_model(self):
+        # ========== 1. 变量索引映射 ==========
+        nodes = sorted(self.data_holder.all_nodes)
+        arcs = sorted(self.data_holder.all_arcs)  # 所有有向弧
+        # 是否整数变量
+        var_type = []
+        # 创建索引映射
+        var_index = {}
+        idx = 0
 
-        counter = TrackedCounter(start=0, step=1)
+        # w_i 变量
+        w_index = {node: idx for idx, node in enumerate(nodes)}
+        idx += len(nodes)
+        var_type += [0] * len(nodes)
 
-        root_info = self.process_data_for_root_problem()
-        root_problem = ProblemNode(self, root_info, foil_must_be_feasible_arc, self.current_solution_map,
-                                   self.org_graph, None, counter, 0)
-        root_problem.apply_modified_arc()
-        root_problem.calc_sub_best()
-        root_problem.calc_error()
+        # x_ij 变量
+        x_index = {}
+        for arc in arcs:
+            var_index[('x', arc)] = idx
+            x_index[arc] = idx
+            idx += 1
+        var_type += [1] * len(arcs)
 
-        # 使用 PriorityQueue 构建优先队列
-        open_queue = PriorityQueue()
-        open_queue.put(root_problem)
-        closed_set = set()
-        # 后续可用 closed_set 记录已探索节点
-        start_time = time.time()
-        time_limit = 300  # 5 minutes
-        while not open_queue.empty():
-            if time.time() - start_time >= time_limit and self.best_leaf_node != None:
-                elapsed = int(time.time() - start_time)
-                minutes = elapsed // 60
-                seconds = elapsed % 60
-                print(f"time limit reached ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
-                break
-            problem = open_queue.get()
+        # y_ij 变量
+        y_index = {}
+        for arc in arcs:
+            var_index[('y', arc)] = idx
+            y_index[arc] = idx
+            idx += 1
+        var_type += [1] * len(arcs)
 
-            closed_set.add(problem)
+        total_vars = idx
+        self.var_index = var_index
+        self.w_index = w_index
+        self.x_index = x_index
+        self.y_index = y_index
 
-            if problem.route_error <= 0:
-                if self.best_leaf_node is None:
-                    self.best_leaf_node = problem
+        # ========== 2. 构建目标向量 c ==========
+        c = np.zeros(total_vars)
 
-                    elapsed = int(time.time() - start_time)
-                    minutes = elapsed // 60
-                    seconds = elapsed % 60
+        for arc in arcs:
+            row = self.get_row_info_by_arc(*arc)
+            # x_ij 的系数
+            c[x_index[arc]] = 1
+            # y_ij 的系数
+            c[y_index[arc]] = row['Deleta_p'] - row['Deleta_n']
 
-                    print(f"first found feasible solution ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
+        # ========== 3. 边界条件 ==========
+        bounds = []
+        # w_i >= 0
+        bounds.extend([(0, None)] * len(nodes))
+        # 0 <= x_ij <= 1
+        bounds.extend([(0, 1)] * len(arcs))
+        # 0 <= y_ij <= 1
+        bounds.extend([(0, 1)] * len(arcs))
 
-                elif problem.better_than_other(self.best_leaf_node):
-                    # 找到可行解之后看看有没有更优解
-                    self.best_leaf_node = problem
+        # ========== 4. 约束构建 ==========
+        # A_ub = []  # 不等式约束矩阵
+        A_ub = dok_matrix((len(arcs) + len(self.data_holder.foil_route_arcs), total_vars))
+        b_ub = []  # 不等式右侧向量
+        # A_eq = []  # 等式约束矩阵
 
-                continue
+        num_fe_symmetry = sum(1 for group in self.data_holder.all_feasible_both_way.values() for (i, j) in group)
+        num_in_symmetry = sum(1 for group in self.data_holder.all_infeasible_both_way.values() for (i, j) in group)
+        num_unchange = sum(
+            1 for (i, j) in self.data_holder.all_arcs if not self.get_row_info_by_arc(i, j)['modify_able_path_type'])
+        total_constrs = len(self.data_holder.foil_route_arcs) + 2 * num_fe_symmetry + 2 * num_in_symmetry + num_unchange
+        A_eq = dok_matrix((total_constrs, total_vars))
+        b_eq = []  # 等式右侧向量
 
-            self.analyzer.find_sub_forks_and_merges_node(problem.df_path_foil, problem.df_path_best,
-                                                         problem.data_holder)
+        # (1) Shortest Path Constraints
+        A_ub_idx = 0
+        A_eq_idx = 0
+        for (i, j) in arcs:
+            row = self.get_row_info_by_arc(i, j)
+            c_ij = row['c']
+            d_ij = row['d']
 
-            info = list(problem.data_holder.foil_fact_fork_merge_nodes.values())[0]
-            df_path_fact = self.generate_sub_fact(info)
-            org_bc_dict = edge_betweenness_to_target_multigraph(problem.new_graph, self.data_holder.end_node_lc,
-                                                                self.heuristic_f)
-            modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem, df_path_fact,
-                                                                           org_bc_dict)
+            # w_j - w_i 项
+            A_ub[A_ub_idx, w_index[j]] = 1
+            A_ub[A_ub_idx, w_index[i]] = -1
+            # -d_ij * x_ij 项
+            A_ub[A_ub_idx, x_index[(i, j)]] = -d_ij
+            # -big_m * y_ij 项
+            A_ub[A_ub_idx, y_index[(i, j)]] = self.big_m
 
-            print(problem)
-            for modify_arc in modify_result_set:
-                # todo 这里不可能不命中，至少起点和终点是一样的
-                sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
-                                          problem.idx_gen, problem.level + 1)
+            b_ub.append(c_ij + self.big_m)
+            A_ub_idx += 1
 
-                if sub_problem in closed_set:
-                    continue
+        # foil route Shortest Path Constraints
+        for (i, j) in self.data_holder.foil_route_arcs:
+            row = self.get_row_info_by_arc(i, j)
+            c_ij = row['c']
+            d_ij = row['d']
 
-                sub_problem.apply_modified_arc()
-                sub_problem.calc_sub_best()
-                sub_problem.calc_error()
+            # foil route feasible
+            A_eq[A_eq_idx, y_index[(i, j)]] = 1
+            b_eq.append(1)
 
-                if self.current_best is None or sub_problem.better_than_other(self.current_best):
-                    self.current_best = sub_problem
+            # foil route Shortest path
+            # w_i - w_j 项
+            A_ub[A_ub_idx, w_index[i]] = 1
+            A_ub[A_ub_idx, w_index[j]] = -1
+            # d_ij * x_ij 项
+            A_ub[A_ub_idx, x_index[(i, j)]] = d_ij
+            # big_m * y_ij 项
+            A_ub[A_ub_idx, y_index[(i, j)]] = self.big_m
 
-                if self.pruning(sub_problem):
-                    print(f"CUT {sub_problem}")
-                    continue
+            b_ub.append(self.big_m - c_ij)
+            A_ub_idx += 1
+            A_eq_idx += 1
 
-                open_queue.put(sub_problem)
+        # (3) Undirected Arc Constraint
+        for f, arcs in self.data_holder.all_feasible_both_way.items():
+            for i, j in arcs:
+                # x_ij = x_ji
+                A_eq[A_eq_idx, x_index[(i, j)]] = 1
+                A_eq[A_eq_idx, x_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
 
-    def generate_sub_fact(self, info_tuple):
-        nodes = info_tuple['fact_sub_path']
-        fork = info_tuple['fork']
-        merge = info_tuple['merge']
+                # y_ij = y_ji
+                A_eq[A_eq_idx, y_index[(i, j)]] = 1
+                A_eq[A_eq_idx, y_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
+        for f, arcs in self.data_holder.all_infeasible_both_way.items():
+            for i, j in arcs:
+                # x_ij = x_ji
+                A_eq[A_eq_idx, x_index[(i, j)]] = 1
+                A_eq[A_eq_idx, x_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
 
-        path_fact = []
-        for i, j in zip(nodes[:-1], nodes[1:]):
-            # todo 可能数据源不应该是这里
-            row = self.data_holder.get_row_info_by_arc(i, j)
-            path_fact.append(row)
+                # y_ij = y_ji
+                A_eq[A_eq_idx, y_index[(i, j)]] = 1
+                A_eq[A_eq_idx, y_index[(j, i)]] = -1
+                b_eq.append(0)
+                A_eq_idx += 1
 
-        df_path_fact = gpd.GeoDataFrame(path_fact, crs=self.org_map_df.crs)
-        df_path_fact = correct_arc_direction(df_path_fact, fork, merge)
+        # (4) can not modify path_type
+        for (i, j) in self.data_holder.all_arcs:
+            row = self.get_row_info_by_arc(i, j)
+            if not row['modify_able_path_type']:
+                A_eq[A_eq_idx, x_index[(i, j)]] = 1
+                b_eq.append(0)
+                A_eq_idx += 1
 
-        return df_path_fact
+        # ========== 5. 保存约束矩阵 ==========
+        # self.A_ub = np.array(A_ub) if A_ub else None
+        self.A_ub = A_ub
+        self.b_ub = np.array(b_ub) if b_ub else None
+        self.A_eq = A_eq
+        self.b_eq = np.array(b_eq) if b_eq else None
+        self.c = c
+        self.bounds = bounds
+        self.var_type = var_type
+        print(self.A_ub.shape)
 
+    def solve_model(self, time_limit=3600, gap=0):
+        opt = {'disp': True,
+               'mip_rel_gap': gap,
+               'time_limit': time_limit,
+               # 'log_file': str(os.path.join(self.config.base_dir, "my_demo", "output", "solver_log.txt"))
+               }
+        # 注意: scipy 1.10 不支持时间限制和间隙控制
+        result = linprog(
+            c=self.c,
+            A_ub=self.A_ub,
+            b_ub=self.b_ub,
+            A_eq=self.A_eq,
+            b_eq=self.b_eq,
+            bounds=self.bounds,
+            method='highs',  # HiGHS 求解器
+            integrality=self.var_type,
+            options=opt
+        )
 
-    def pruning(self, problem) -> bool:
-        if self.best_leaf_node is not None \
-                and problem.not_feasible() \
-                and problem.graph_error >= self.best_leaf_node.graph_error:
-            # 已经找到了可行解 当前是不可行解  但是发现有graph error大于可行解的,这样是不可能找到比当前可行解好的方案
-            return True
+        if not result.success:
+            raise RuntimeError(f"求解失败: {result.message}")
 
-        if problem.not_feasible() \
-                and problem.route_error > self.current_best.route_error \
-                and problem.graph_error >= self.current_best.graph_error:
-            # 当前route error 更差 但是graph error不好于当前最小
-            do_pruning = self.calculate_acceptance_probability(problem) <= random.random()
-            return do_pruning
+        # 将解保存到变量字典
+        self.solution = result.x
+        self._save_solution_to_vars()
 
-        return False
+    def _save_solution_to_vars(self):
+        """将解向量赋值回字典变量"""
+        nodes = sorted(self.data_holder.all_nodes)
+        arcs = self.data_holder.all_arcs
 
-    def calculate_acceptance_probability(self, problem, max_level=10):
-        """
-        计算接受当前解的概率，随着层数增加，不接受差解的概率增大。
+        # 初始化字典
+        self.w = {node: 0.0 for node in nodes}
+        self.x = defaultdict(dict)
+        self.y = defaultdict(dict)
 
-        Args:
-            current_best: 当前最优解
-            current: 当前解
-            layer: 当前层数
-            level: 最大层数（用来控制层数的影响程度）
+        # 填充w
+        for node in nodes:
+            self.w[node] = self.solution[self.w_index[node]]
 
-        Returns:
-            probability: 接受当前解的概率
-        """
-        # 计算当前解与最优解的差异（以route_error或graph_error为例）
-        delta = (problem.route_error - self.current_best.route_error) + (
-                problem.graph_error - self.current_best.graph_error)
+        # 填充x和y
+        for arc in arcs:
+            i, j = arc
+            x_val = self.solution[self.x_index[arc]]
+            y_val = self.solution[self.y_index[arc]]
 
-        if max_level == problem.level:
-            acceptance_probability = 0
-        else:
-            acceptance_probability = math.exp((-delta) / (max_level - problem.level))
+            self.x[i][j] = x_val
+            self.y[i][j] = y_val
 
-        # 将概率限制在[0, 1]范围内
-        acceptance_probability = max(0, min(1, acceptance_probability))
-
-        return acceptance_probability
+            # 确保对称性
+            if (j, i) in arcs:
+                self.x[j][i] = x_val
+                self.y[j][i] = y_val

@@ -19,9 +19,6 @@ from src.solver.SearchSolverSaturated import SearchSolverSaturated
 from utils.dataparser import convert_op_list_to_wkt
 
 def get_results(args):
-    # TODO: Implement this function with your own algorithm
-    map_df = None
-    op_list = None
     config = Config()
     config.load_from_args(args)
 
