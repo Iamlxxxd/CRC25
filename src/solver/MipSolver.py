@@ -59,11 +59,11 @@ class MipSolver(BaseSolver):
                 if row is None:
                     continue
                 if value >= 0.99:
-                    if row['include'] < 1:
+                    if row['include'] < 1 and not (row['curb_height_max_include'] and row['obstacle_free_width_float_include']):
                         # 原来不可行 但是改成可行
                         self.modify_arc_solution.append(((i, j), ArcModifyTag.TO_FE))
                 else:
-                    if row['include'] > 0:
+                    if row['include'] > 0 and row['curb_height_max_include'] and row['obstacle_free_width_float_include']:
                         # 原来可行 但是改成不可行
                         self.modify_arc_solution.append(((i, j), ArcModifyTag.TO_INFE))
                 feature_modify_mark.add((i, j))
