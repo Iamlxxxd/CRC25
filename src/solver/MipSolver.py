@@ -9,8 +9,7 @@ from collections import defaultdict
 import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import dok_matrix
-
-from my_demo.config import Config
+from config import Config
 from src.solver.ArcModifyTag import ArcModifyTag
 from src.solver.BaseSolver import BaseSolver
 
@@ -334,7 +333,7 @@ class MipSolver(BaseSolver):
         self.c = c
         self.bounds = bounds
         self.var_type = var_type
-        print(self.A_ub.shape)
+        self.timer.check_point("MipSolver", "init model")
 
     def solve_model(self, time_limit=3600, gap=0):
         opt = {'disp': True,
@@ -360,7 +359,10 @@ class MipSolver(BaseSolver):
 
         # 将解保存到变量字典
         self.solution = result.x
+        self.timer.check_point("MipSolver", "solve_model")
+
         self._save_solution_to_vars()
+        self.timer.check_point("MipSolver", "save mip solution")
 
     def _save_solution_to_vars(self):
         """将解向量赋值回字典变量"""

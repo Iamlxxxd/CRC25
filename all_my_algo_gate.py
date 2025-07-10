@@ -9,9 +9,7 @@
 import os
 import sys
 import yaml
-from unittest import TestCase
 import time
-import multiprocessing
 from multiprocessing import Process, Queue
 
 from visual import visual_map_foil_modded
@@ -38,7 +36,8 @@ mip_visual_path = os.path.join(out_path, "mip")
 search_visual_path = os.path.join(out_path, "search")
 hybrid_visual_path = os.path.join(out_path, "hybrid")
 
-from AlgoTimer import AlgoTimer
+from src.AlgoTimer import AlgoTimer
+from logger_config import logger
 
 
 def single_mip(route_name=None):
@@ -304,11 +303,13 @@ def _compare_results(search_result, hybrid_result):
         return search_result  # 只有result1有结果
 
     search_error = search_result.get("error", (float("inf"), float("inf")))
-    hybrid_result = hybrid_result.get("error", (float("inf"), float("inf")))
+    hybrid_error = hybrid_result.get("error", (float("inf"), float("inf")))
 
-    if search_error < hybrid_result:
+    if search_error < hybrid_error:
+        logger.log(f"best solution from search:{str(search_error)}")
         return search_result
     else:
+        logger.log(f"best solution from hybrid:{str(hybrid_error)}")
         return hybrid_result
 
 
@@ -341,7 +342,7 @@ def multi_job(args):
         remaining_time = timeout - (current_time - start_time)
 
         if remaining_time <= 0:
-            print("multi_job 超时")
+            logger.warning("multi_job 超时")
             break
 
         try:
@@ -350,15 +351,16 @@ def multi_job(args):
             algo_type = result[0]
 
             if len(result) == 3:  # 有异常
-                print(f"{algo_type} 算法执行出错: {result[2]}")
+                logger.error(f"{algo_type} 算法执行出错: {result[2]}")
                 results[algo_type] = (None, None)
             else:
                 results[algo_type] = result[1]
 
             collected_results += 1
-            print(f"{algo_type} 算法完成")
+            logger.info(f"{algo_type} 算法完成")
 
         except:
+            # todo 内部报错好像不会退出
             # 超时或其他异常，继续等待
             continue
 

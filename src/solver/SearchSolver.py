@@ -8,7 +8,6 @@
 from copy import deepcopy
 import geopandas as gpd
 from queue import PriorityQueue
-import time
 import random
 import math
 
@@ -16,11 +15,11 @@ from config import Config
 from src.calc.DataAnalyzer import DataAnalyzer
 from src.solver.BaseSolver import BaseSolver
 from src.solver.ProblemNode import ProblemNode
-from src.utils.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph, \
-    time_over_check
+from src.utils.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph
 from src.TrackedCounter import TrackedCounter
 from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
-from AlgoTimer import AlgoTimer
+from src.AlgoTimer import AlgoTimer
+from logger_config import logger
 
 
 class SearchSolver(BaseSolver):
@@ -59,7 +58,6 @@ class SearchSolver(BaseSolver):
 
     def process_solution_from_model(self):
         self.current_solution_map = self.best_leaf_node.map_df
-        print(self.best_leaf_node.inherit)
         self.modify_arc_solution = self.best_leaf_node.inherit
         self.get_best_route_df_from_solution()
         self.calc_error()
@@ -97,9 +95,9 @@ class SearchSolver(BaseSolver):
 
     def do_solve(self):
 
-        self.timer.check_point("do_basic_analyze", "start")
+        self.timer.check_point("SearchSolver", "do_basic_analyze", "start")
         self.analyzer.do_basic_analyze()
-        self.timer.check_point("do_basic_analyze", "end")
+        self.timer.check_point("SearchSolver", "do_basic_analyze", "end")
 
         # 这里把foil的不可行变成可行 存到了current_solution_map里
         foil_must_be_feasible_arc = do_foil_must_be_feasible(self)
@@ -118,12 +116,12 @@ class SearchSolver(BaseSolver):
         open_queue.put(root_problem)
         closed_set = set()
 
-        self.timer.check_point("root problem")
+        self.timer.check_point("SearchSolver", "root problem")
 
         # 后续可用 closed_set 记录已探索节点
         while not open_queue.empty():
             if self.timer.time_over_check():
-                self.timer.time_to_start(f"best:{self.best_leaf_node}")
+                self.timer.time_to_start("SearchSolver", f"best:{self.best_leaf_node}")
                 break
 
             problem = open_queue.get()
@@ -134,12 +132,13 @@ class SearchSolver(BaseSolver):
                 if self.best_leaf_node is None:
                     self.best_leaf_node = problem
 
-                    self.timer.time_to_start(f"first found feasible solution best:{self.best_leaf_node}")
+                    self.timer.time_to_start("SearchSolver",
+                                             f"first found feasible solution best:{self.best_leaf_node}")
 
                 elif problem.better_than_other(self.best_leaf_node):
                     # 找到可行解之后看看有没有更优解
                     self.best_leaf_node = problem
-                    self.timer.time_to_start(f"found better solution better:{self.best_leaf_node}")
+                    self.timer.time_to_start("SearchSolver", f"found better solution better:{self.best_leaf_node}")
 
                 continue
 
@@ -153,8 +152,9 @@ class SearchSolver(BaseSolver):
             modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem, df_path_fact,
                                                                            org_bc_dict)
 
-            self.timer.check_point(f"branch from {problem}")
+            self.timer.check_point("SearchSolver", f"branch from {problem}")
 
+            num_of_child = 0
             for modify_arc in modify_result_set:
                 # todo 这里不可能不命中，至少起点和终点是一样的
                 sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
@@ -171,21 +171,22 @@ class SearchSolver(BaseSolver):
                     self.current_best = sub_problem
 
                 if self.pruning(sub_problem):
-                    print(f"CUT {sub_problem}")
+                    logger.info(f"SearchSolver CUT {sub_problem}")
                     continue
 
+                num_of_child = num_of_child + 1
                 open_queue.put(sub_problem)
 
-            self.timer.check_point(f"solve child {problem}")
+            self.timer.check_point("SearchSolver", f"solve child num:{num_of_child}")
 
         if self.best_leaf_node is None:
             if self.current_best is None:
                 self.best_leaf_node = root_problem
-                self.timer.time_to_start(f"root problem return:{self.best_leaf_node}")
+                self.timer.time_to_start("SearchSolver", f"root problem return:{self.best_leaf_node}")
             else:
                 # 如果没找到可行解  就返回当前最好的解
                 self.best_leaf_node = self.current_best
-                self.timer.time_to_start(f"infeasible solution return:{self.best_leaf_node}")
+                self.timer.time_to_start("SearchSolver", f"infeasible solution return:{self.best_leaf_node}")
 
     def generate_sub_fact(self, info_tuple):
         nodes = info_tuple['fact_sub_path']
@@ -210,12 +211,12 @@ class SearchSolver(BaseSolver):
             # 已经找到了可行解 当前是不可行解  但是发现有graph error大于可行解的,这样是不可能找到比当前可行解好的方案
             return True
 
-        if problem.not_feasible() \
-                and problem.route_error > self.current_best.route_error \
-                and problem.graph_error >= self.current_best.graph_error:
-            # 当前route error 更差 但是graph error不好于当前最小
-            do_pruning = self.calculate_acceptance_probability(problem) <= random.random()
-            return do_pruning
+        # if problem.not_feasible() \
+        #         and problem.route_error > self.current_best.route_error \
+        #         and problem.graph_error >= self.current_best.graph_error:
+        #     # 当前route error 更差 但是graph error不好于当前最小
+        #     do_pruning = self.calculate_acceptance_probability(problem) <= random.random()
+        #     return do_pruning
 
         return False
 

@@ -179,3 +179,7 @@ cython_debug/
 # JetBrains IDE
 .idea/
 my_demo/output/
+
+# 日志文件
+log/
+*.log

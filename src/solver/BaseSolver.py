@@ -20,7 +20,7 @@ from src.utils.common_utils import correct_arc_direction
 from src.solver.ArcModifyTag import ArcModifyTag
 from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
 from src.utils.dataparser import convert
-from AlgoTimer import AlgoTimer
+from src.AlgoTimer import AlgoTimer
 
 
 class BaseSolver:
@@ -40,6 +40,7 @@ class BaseSolver:
         self.route_error = float("inf")
         self.graph_error = float("inf")
         self.data_holder = DataHolder()
+        self.timer.check_point("BaseSolver", "init solver")
 
     def init_from_config(self):
 
@@ -67,11 +68,17 @@ class BaseSolver:
         self.path_fact, self.G_path_fact, self.df_path_fact = self.router.get_route(self.org_graph, self.origin_node,
                                                                                     self.dest_node, self.heuristic_f)
         self.df_path_foil = self.config.df_path_foil
+        self.timer.check_point("BaseSolver", "load_basic_data")
 
     def data_process(self):
         self.process_org_map_df()
+        self.timer.check_point("BaseSolver", "process_org_map_df")
+
         self.process_foil()
+        self.timer.check_point("BaseSolver", "process_foil")
+
         self.process_fact()
+        self.timer.check_point("BaseSolver", "process_fact")
 
         self.current_solution_map = deepcopy(self.org_map_df)
 

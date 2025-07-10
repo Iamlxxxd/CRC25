@@ -1,4 +1,5 @@
 import time
+from logger_config import logger
 
 
 class AlgoTimer:
@@ -33,11 +34,12 @@ class AlgoTimer:
 
         # 将所有参数转换为字符串并连接
         message = ' '.join(str(arg) for arg in args)
-        print(message, f"耗时: {elapsed_time:.3f}秒")
+        logger.info(f"{message} 耗时: {elapsed_time:.3f}秒")
 
         # 更新上次检查点时间为当前时间
         self.last_check_time = current_time
 
-    def time_to_start(self, description):
+    def time_to_start(self, *args):
+        message = ' '.join(str(arg) for arg in args)
         elapsed_time = time.time() - self.start_time
-        print(description, f"距离开始: {elapsed_time:.3f}秒")
+        logger.info(f"{message} 距离开始: {elapsed_time:.3f}秒")
