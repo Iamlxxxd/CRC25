@@ -5,13 +5,13 @@
 @time   :    2025/7/9 17:53
 @project:    CRC25
 """
-import os
-import sys
 
 import os
 import sys
 import yaml
 from unittest import TestCase
+import time
+
 from visual import visual_map_foil_modded
 
 # 获取当前文件所在目录（即submission目录）
@@ -20,15 +20,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(ROOT_DIR)  # 将项目根目录加入路径
 
-import argparse
-import json
-
-from config import Config
 from src.solver.MipSolver import MipSolver
-from src.calc.common_utils import set_seed
 from config import Config
 from src.solver.SearchSolver import SearchSolver
-from src.calc.common_utils import set_seed
+from src.utils.common_utils import set_seed
+from all_my_algo_gate import *
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(current_dir, "config.yaml")
@@ -40,122 +36,43 @@ mip_visual_path = os.path.join(out_path, "mip")
 search_visual_path = os.path.join(out_path, "search")
 hybrid_visual_path = os.path.join(out_path, "hybrid")
 
-VISUAL = True
+ROUTE_NAME = "osdpm_0_3"
+
+test_args = {
+    "meta_data_path": os.path.join(base_dir, "data/train/routes", ROUTE_NAME, "metadata.json"),
+    "basic_network_path": os.path.join(base_dir, "data/train/maps/osdpm_map.gpkg"),  # 这个如果地图名字换了需要看metadata.json里写的地图
+    "foil_json_path": os.path.join(base_dir, "data/train/routes", ROUTE_NAME, "foil_route.json"),
+    "df_path_foil_path": os.path.join(base_dir, "data/train/routes", ROUTE_NAME, "foil_route.gpkg"),
+    "gdf_coords_path": os.path.join(base_dir, "data/train/routes", ROUTE_NAME, "route_start_end.csv"),
+    "output_path": os.path.join(base_dir, "data/train/routes", ROUTE_NAME, "submission_out")
+}
+import argparse
 
 
 class Test(TestCase):
     def test_mip(self):
-        map_df, op_list = self.single_mip()
+        map_df, op_list = single_mip()
 
     def test_search(self):
-        map_df, op_list = self.single_search()
+        map_df, op_list = single_search()
 
     def test_hybrid(self):
-        map_df, op_list = self.single_hybrid()
+        map_df, op_list = single_hybrid()
 
-    def single_mip(self, route_name=None):
-        set_seed()
+    def test_mip_from_args(self):
+        test_args.update({"output_path": mip_visual_path})
+        my_args = argparse.Namespace(**test_args)
+        map_df, op_list = single_mip_from_args(my_args)
 
-        with open(config_path, 'r', encoding='utf-8') as f:
-            yaml_config = yaml.safe_load(f)
-        # 设置地图名
-        if route_name is not None:
-            yaml_config['paths']['route_name'] = route_name
+    def test_search_from_args(self):
+        test_args.update({"output_path": search_visual_path})
+        my_args = argparse.Namespace(**test_args)
+        map_df, op_list = single_search_from_args(my_args)
 
-        # 初始化DataLoader，传入base_dir
-        config = Config(yaml_config, base_dir=base_dir)
-        config.out_path = out_path
+    def test_hybrid_from_args(self):
+        test_args.update({"output_path": hybrid_visual_path})
+        my_args = argparse.Namespace(**test_args)
+        map_df, op_list = single_hybrid_from_args(my_args)
 
-        config.load_from_yaml()
-
-        solver = MipSolver(config)
-        solver.init_from_config()
-
-        solver.init_model()
-        solver.solve_model()
-
-        solver.process_solution_from_model()
-        map_df = solver.out_put_df
-        op_list = solver.out_put_op_list
-
-        if VISUAL:
-            os.makedirs(mip_visual_path, exist_ok=True)
-            visual_map_foil_modded(solver.process_visual_data(), mip_visual_path, config.route_name)
-
-        return map_df, op_list
-
-    def single_search(self, route_name=None):
-        set_seed()
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            yaml_config = yaml.safe_load(f)
-        # 设置地图名
-        if route_name is not None:
-            yaml_config['paths']['route_name'] = route_name
-
-        # 初始化DataLoader，传入base_dir
-        config = Config(yaml_config, base_dir=base_dir)
-        config.out_path = out_path
-
-        config.load_from_yaml()
-
-        solver = SearchSolver(config)
-        solver.init_from_config()
-
-        solver.do_solve()
-
-        solver.process_solution_from_model()
-        map_df = solver.out_put_df
-        op_list = solver.out_put_op_list
-
-        if VISUAL:
-            os.makedirs(search_visual_path, exist_ok=True)
-            visual_map_foil_modded(solver.process_visual_data(), search_visual_path, config.route_name)
-
-        return map_df, op_list
-
-    def single_hybrid(self, route_name=None):
-        set_seed()
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            yaml_config = yaml.safe_load(f)
-        # 设置地图名
-        if route_name is not None:
-            yaml_config['paths']['route_name'] = route_name
-
-        # 初始化DataLoader，传入base_dir
-        config = Config(yaml_config, base_dir=base_dir)
-        config.out_path = out_path
-
-        config.load_from_yaml()
-
-        mip_solver = MipSolver(config)
-        mip_solver.init_from_config()
-
-        mip_solver.init_model()
-        mip_solver.solve_model()
-
-        mip_solver.process_solution_from_model()
-
-        #todo @junhao
-        mip_solver.modify_arc_solution
-        if VISUAL:
-            os.makedirs(hybrid_visual_path, exist_ok=True)
-            visual_map_foil_modded(mip_solver.process_visual_data(), hybrid_visual_path, config.route_name + "_mip")
-
-        if mip_solver.route_error <= 0 and mip_solver.graph_error <= 1:
-            # 改一条边或者不改 已经是最优了  不需要继续搜了 搜也不可能搜到更好的
-
-            return mip_solver.out_put_df, mip_solver.out_put_op_list
-
-        search_solver = SearchSolver(config)
-        search_solver.init_from_other_solver(mip_solver)
-        search_solver.do_solve()
-
-        search_solver.process_solution_from_model()
-        if VISUAL:
-            os.makedirs(hybrid_visual_path, exist_ok=True)
-            visual_map_foil_modded(search_solver.process_visual_data(), hybrid_visual_path,
-                                   config.route_name)
-
-        return search_solver.out_put_df, search_solver.out_put_op_list
+    def test_multi_job(self):
+        pass

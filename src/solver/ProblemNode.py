@@ -12,8 +12,8 @@ from typing import List
 from geopandas import GeoDataFrame
 
 from ..DataHolder import DataHolder
-from ..calc.common_utils import correct_arc_direction
-from ..calc.dataparser import handle_weight_with_recovery, create_network_graph
+from src.utils.common_utils import correct_arc_direction
+from src.utils.dataparser import handle_weight_with_recovery, create_network_graph
 from ..calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
 
 

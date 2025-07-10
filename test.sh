@@ -7,7 +7,6 @@ ROUTE_NAME="osdpm_0_3"
 echo $ROUTE_NAME
 # 硬编码设置所有必要的路径
 META_DATA_PATH="$BASE_DIR/data/train/routes/$ROUTE_NAME/metadata.json"
-MAP_NAME="singapore"  # 替换为实际的地图名称
 BASIC_NETWORK_PATH="$BASE_DIR/data/train/maps/osdpm_map.gpkg"  #这里需要注意下读的不一定是这个图
 FOIL_JSON_PATH="$BASE_DIR/data/train/routes/$ROUTE_NAME/foil_route.json"
 DF_PATH_FOIL_PATH="$BASE_DIR/data/train/routes/$ROUTE_NAME/foil_route.gpkg"

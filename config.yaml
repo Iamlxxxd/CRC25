@@ -7,4 +7,5 @@ params:
   heuristic: dijkstra
   heuristic_f: my_weight
   multi_job: True
-  time_limit: 120  # 单位：秒
+  visual: True
+  time_limit: 295  # 单位：秒

@@ -1,4 +1,3 @@
-import sys
 import os
 import json
 import geopandas as gpd
@@ -6,7 +5,7 @@ import pandas as pd
 from geopandas import GeoDataFrame
 from shapely import wkt
 
-from src.calc.common_utils import ensure_crs
+from src.utils.common_utils import ensure_crs
 
 class Config:
     def __init__(self, config=None, base_dir=None):
@@ -33,9 +32,7 @@ class Config:
         # 从args中加载foil数据
         self._load_foil_data_from_args(args)
         # 设置默认参数
-        self._load_default_params()
-        # 设置输出路径
-        self.store_path = args.output_path
+        self.load_params()
 
     def _load_network_data_from_args(self, args):
         # 读取metadata.json
@@ -66,12 +63,6 @@ class Config:
         self.df_path_foil_path = args.df_path_foil_path
         self.df_path_foil: GeoDataFrame = gpd.read_file(self.df_path_foil_path)
         self.df_path_foil = ensure_crs(self.df_path_foil, self.meta_map["CRS"])
-
-    def _load_default_params(self):
-        # 设置默认参数值，因为从args中无法获取这些参数
-        self.heuristic = 'default'
-        self.heuristic_f = 1.0
-        self.time_limit = 300  # 默认5分钟
 
     def load_network_data(self):
         # 读取metadata.json
@@ -110,3 +101,4 @@ class Config:
         self.heuristic_f = self.config['params']['heuristic_f']
         self.time_limit = self.config['params']['time_limit']
         self.store_path = self._full_path(self.config['paths'].get('store_path', './outputs/'))
+        self.visual = self.config['params']['visual']

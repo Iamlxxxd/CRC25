@@ -5,33 +5,21 @@
 @time   :    2025/7/9 17:02
 @project:    CRC25
 """
-import os
-import sys
 from copy import deepcopy
 from geopandas import GeoDataFrame
-import geopandas as gpd
 import pandas as pd
 import numpy as np
-from queue import PriorityQueue
-import time
-import random
-import math
 
-from kiwisolver import Solver
 from shapely import to_wkt
 
 from config import Config
 from src.DataHolder import DataHolder
 from src.calc.router import Router
-from src.calc.DataAnalyzer import DataAnalyzer
-from src.solver.ProblemNode import ProblemNode
-from src.calc.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
-from src.calc.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph
+from src.utils.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
+from src.utils.common_utils import correct_arc_direction
 from src.solver.ArcModifyTag import ArcModifyTag
 from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
-from src.TrackedCounter import TrackedCounter
-from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
-from src.calc.dataparser import convert
+from src.utils.dataparser import convert
 
 
 class BaseSolver:
@@ -41,8 +29,10 @@ class BaseSolver:
     eazy_name_map = {"curb_height_max": "H", "obstacle_free_width_float": "W"}
     eazy_name_map_reversed = {"H": "curb_height_max", "W": "obstacle_free_width_float"}
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, start_time):
         self.config = config
+        self.start_time = start_time
+        self.time_limit = self.config.time_limit
         self.meta_map = config.meta_map
 
         self.modify_arc_solution = []
@@ -253,7 +243,6 @@ class BaseSolver:
     def get_row_info_by_arc(self, i, j):
         return self.data_holder.row_data.get((i, j), self.data_holder.row_data.get((j, i), None))
 
-
     def get_best_route_df_from_solution(self):
         self.current_solution_map = handle_weight_with_recovery(self.current_solution_map, self.config.user_model)
 
@@ -275,7 +264,8 @@ class BaseSolver:
         self.graph_error = len(self.sub_op_list)
 
         self.actual_route_error = 1 - common_edges_similarity_route_df_weighted(self.df_path_best, self.df_path_foil,
-                                                                    self.config.user_model["attrs_variable_names"])
+                                                                                self.config.user_model[
+                                                                                    "attrs_variable_names"])
 
         self.route_error = max(self.actual_route_error - self.config.user_model["route_error_threshold"], 0)
 

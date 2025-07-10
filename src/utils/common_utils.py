@@ -10,6 +10,9 @@ import math
 import os
 import random
 from collections import defaultdict
+from operator import truediv
+
+import geopandas as gpd
 
 import numpy as np
 
@@ -28,55 +31,6 @@ def ensure_crs(gdf, crs):
     elif gdf.crs != crs:
         gdf = gdf.set_crs(crs, allow_override=True)
     return gdf.to_crs(crs)
-
-
-import gurobipy as gp
-
-
-def get_constraint_string(model, constr_name):
-    """
-    获取约束的原始表达式结构，并拼接为变量名:值的字符串形式
-    返回示例: "x:1.0 + y:2.0 > z:0.5"
-    """
-    try:
-        constr = model.getConstrByName(constr_name)
-        if not constr:
-            return "约束不存在"
-
-        # 获取约束的线性表达式和运算符
-        expr = model.getRow(constr)
-        sense = constr.Sense  # 约束类型（'<', '>', '='）
-        rhs = constr.RHS  # 右侧常量
-
-        # 构建左侧表达式字符串
-        lhs_str = ""
-        for i in range(expr.size()):
-            var = expr.getVar(i)
-            coeff = expr.getCoeff(i)
-            # 处理符号（正负）
-            if coeff >= 0 and i > 0:
-                lhs_str += " + "
-            elif coeff < 0:
-                lhs_str += " - "
-            # 拼接变量名和值
-            lhs_str += f"{var.VarName}:{var.X}"
-
-        # 根据约束类型拼接完整表达式
-        sense_symbol = {
-            '<': ' < ',
-            '>': ' > ',
-            '=': ' == '
-        }.get(sense, ' ? ')
-
-        return f"{lhs_str}{sense_symbol}{rhs}"
-
-    except gp.GurobiError as e:
-        return f"Gurobi错误: {e}"
-    except Exception as e:
-        return f"未知错误: {e}"
-
-
-import geopandas as gpd
 
 
 def correct_arc_direction(gdf, start_node, end_node):
@@ -131,9 +85,7 @@ def extract_nodes(df):
     return nodes
 
 
-
 def edge_betweenness_to_target_multigraph(G, target, weight=None):
-
     # 初始化数据结构
     dist = defaultdict(lambda: float('inf'))
     sigma = defaultdict(int)
@@ -269,3 +221,13 @@ def compare_dicts(dict1, dict2):
 
     _compare(dict1, dict2)
     return diff
+
+
+import time
+
+
+def time_over_check(start_time, time_limit) -> bool:
+    if time.time() - start_time >= time_limit:
+        return True
+
+    return False

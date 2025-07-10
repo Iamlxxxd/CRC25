@@ -5,37 +5,26 @@
 @time   :    2025/6/25 10:56
 @project:    CRC25
 """
-import os
-import sys
 from copy import deepcopy
-from geopandas import GeoDataFrame
 import geopandas as gpd
-import pandas as pd
-import numpy as np
 from queue import PriorityQueue
 import time
 import random
 import math
-from shapely import to_wkt
 
 from config import Config
-from src.DataHolder import DataHolder
-from src.calc.router import Router
 from src.calc.DataAnalyzer import DataAnalyzer
 from src.solver.BaseSolver import BaseSolver
 from src.solver.ProblemNode import ProblemNode
-from src.calc.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
-from src.calc.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph
-from src.solver.ArcModifyTag import ArcModifyTag
-from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
+from src.utils.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph, \
+    time_over_check
 from src.TrackedCounter import TrackedCounter
 from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
-from src.calc.dataparser import convert
 
 
 class SearchSolver(BaseSolver):
-    def __init__(self, config: Config):
-        super().__init__(config)
+    def __init__(self, config: Config, start_time):
+        super().__init__(config, start_time)
 
         self.best_leaf_node: ProblemNode = None
         self.current_best: ProblemNode = None
@@ -124,15 +113,14 @@ class SearchSolver(BaseSolver):
         open_queue.put(root_problem)
         closed_set = set()
         # 后续可用 closed_set 记录已探索节点
-        start_time = time.time()
-        time_limit = 300  # 5 minutes
         while not open_queue.empty():
-            if time.time() - start_time >= time_limit and self.best_leaf_node != None:
-                elapsed = int(time.time() - start_time)
+            if time_over_check(self.start_time, self.time_limit):
+                elapsed = int(time.time() - self.start_time)
                 minutes = elapsed // 60
                 seconds = elapsed % 60
                 print(f"time limit reached ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
                 break
+
             problem = open_queue.get()
 
             closed_set.add(problem)
@@ -141,7 +129,7 @@ class SearchSolver(BaseSolver):
                 if self.best_leaf_node is None:
                     self.best_leaf_node = problem
 
-                    elapsed = int(time.time() - start_time)
+                    elapsed = int(time.time() - self.start_time)
                     minutes = elapsed // 60
                     seconds = elapsed % 60
 
@@ -184,6 +172,13 @@ class SearchSolver(BaseSolver):
                     continue
 
                 open_queue.put(sub_problem)
+
+        if self.best_leaf_node is None:
+            if self.current_best is None:
+                self.best_leaf_node = root_problem
+            else:
+                # 如果没找到可行解  就返回当前最好的解
+                self.best_leaf_node = self.current_best
 
     def generate_sub_fact(self, info_tuple):
         nodes = info_tuple['fact_sub_path']
