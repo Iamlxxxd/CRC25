@@ -57,7 +57,6 @@ class Test(TestCase):
     def test_search(self):
         return_result = single_search()
 
-
     def test_hybrid(self):
         return_result = single_hybrid()
 

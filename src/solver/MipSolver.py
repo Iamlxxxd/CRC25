@@ -48,11 +48,11 @@ class MipSolver(BaseSolver):
                 if row is None:
                     continue
                 if value >= 0.99:
-                    if row['include'] < 1:
+                    if row['include'] < 1 and not (row['curb_height_max_include'] and row['obstacle_free_width_float_include']):
                         # 原来不可行 但是改成可行
                         self.modify_arc_solution.append(((i, j), ArcModifyTag.TO_FE))
                 else:
-                    if row['include'] > 0:
+                    if row['include'] > 0 and row['curb_height_max_include'] and row['obstacle_free_width_float_include']:
                         # 原来可行 但是改成不可行
                         self.modify_arc_solution.append(((i, j), ArcModifyTag.TO_INFE))
                 feature_modify_mark.add((i, j))
@@ -74,11 +74,16 @@ class MipSolver(BaseSolver):
                     type_modify_mark.add((i, j))
 
     def apply_mip_modified_arc(self):
+        modify_arc_solution_new = []
         for (i, j), modify_tag in self.modify_arc_solution:
             modified_row = self.modify_df_arc_with_attr(i, j, modify_tag)
             solution_row = self.current_solution_map.loc[modified_row.name]
             modified_row['modified'] = modified_row['modified'] + solution_row['modified']
             self.current_solution_map.loc[modified_row.name] = modified_row
+            # filter actual modified arcs
+            if len(modified_row['modified'])>0:
+                modify_arc_solution_new.append(((i, j), modify_tag))
+        self.modify_arc_solution = modify_arc_solution_new
 
     def modify_df_arc_with_attr(self, i, j, tag, attr_name=None):
         row = self.get_row_info_by_arc(i, j)
