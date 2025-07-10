@@ -136,8 +136,6 @@ class Test(TestCase):
         mip_solver.solve_model()
 
         mip_solver.process_solution_from_model()
-
-        #todo @junhao
         mip_solver.modify_arc_solution
         if VISUAL:
             os.makedirs(hybrid_visual_path, exist_ok=True)

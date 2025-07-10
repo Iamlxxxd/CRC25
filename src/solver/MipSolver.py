@@ -85,11 +85,16 @@ class MipSolver(BaseSolver):
                     type_modify_mark.add((i, j))
 
     def apply_mip_modified_arc(self):
+        modify_arc_solution_new = []
         for (i, j), modify_tag in self.modify_arc_solution:
             modified_row = self.modify_df_arc_with_attr(i, j, modify_tag)
             solution_row = self.current_solution_map.loc[modified_row.name]
             modified_row['modified'] = modified_row['modified'] + solution_row['modified']
             self.current_solution_map.loc[modified_row.name] = modified_row
+            # filter actual modified arcs
+            if len(modified_row['modified'])>0:
+                modify_arc_solution_new.append(((i, j), modify_tag))
+        self.modify_arc_solution = modify_arc_solution_new
 
     def modify_df_arc_with_attr(self, i, j, tag, attr_name=None):
         row = self.get_row_info_by_arc(i, j)
