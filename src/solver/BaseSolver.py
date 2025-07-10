@@ -37,7 +37,8 @@ class BaseSolver:
 
         self.modify_arc_solution = []
         self.modify_arc_dict = dict()
-
+        self.route_error = float("inf")
+        self.graph_error = float("inf")
         self.data_holder = DataHolder()
 
     def init_from_config(self):

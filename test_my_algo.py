@@ -48,31 +48,28 @@ test_args = {
 }
 import argparse
 
+my_args = argparse.Namespace(**test_args)
 
 class Test(TestCase):
     def test_mip(self):
-        map_df, op_list = single_mip()
+        return_result = single_mip()
 
     def test_search(self):
-        map_df, op_list = single_search()
+        return_result = single_search()
+
 
     def test_hybrid(self):
-        map_df, op_list = single_hybrid()
+        return_result = single_hybrid()
 
     def test_mip_from_args(self):
-        test_args.update({"output_path": mip_visual_path})
-        my_args = argparse.Namespace(**test_args)
-        map_df, op_list = single_mip_from_args(my_args)
+        return_result = single_mip_from_args(my_args)
 
     def test_search_from_args(self):
-        test_args.update({"output_path": search_visual_path})
-        my_args = argparse.Namespace(**test_args)
-        map_df, op_list = single_search_from_args(my_args)
+
+        return_result = single_search_from_args(my_args)
 
     def test_hybrid_from_args(self):
-        test_args.update({"output_path": hybrid_visual_path})
-        my_args = argparse.Namespace(**test_args)
-        map_df, op_list = single_hybrid_from_args(my_args)
+        return_result = single_hybrid_from_args(my_args)
 
     def test_multi_job(self):
-        pass
+        return_result = multi_job(my_args)
