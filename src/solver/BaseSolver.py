@@ -20,6 +20,7 @@ from src.utils.common_utils import correct_arc_direction
 from src.solver.ArcModifyTag import ArcModifyTag
 from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
 from src.utils.dataparser import convert
+from AlgoTimer import AlgoTimer
 
 
 class BaseSolver:
@@ -29,10 +30,9 @@ class BaseSolver:
     eazy_name_map = {"curb_height_max": "H", "obstacle_free_width_float": "W"}
     eazy_name_map_reversed = {"H": "curb_height_max", "W": "obstacle_free_width_float"}
 
-    def __init__(self, config: Config, start_time):
+    def __init__(self, config: Config, timer: AlgoTimer):
         self.config = config
-        self.start_time = start_time
-        self.time_limit = self.config.time_limit
+        self.timer: AlgoTimer = timer
         self.meta_map = config.meta_map
 
         self.modify_arc_solution = []

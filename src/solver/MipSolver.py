@@ -16,8 +16,8 @@ from src.solver.BaseSolver import BaseSolver
 
 
 class MipSolver(BaseSolver):
-    def __init__(self, config: Config, start_time):
-        super().__init__(config, start_time)
+    def __init__(self, config: Config, timer):
+        super().__init__(config, timer)
 
     def process_solution_from_model(self, exclude_arcs=None):
         if exclude_arcs is None:

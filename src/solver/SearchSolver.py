@@ -20,11 +20,12 @@ from src.utils.common_utils import correct_arc_direction, extract_nodes, edge_be
     time_over_check
 from src.TrackedCounter import TrackedCounter
 from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
+from AlgoTimer import AlgoTimer
 
 
 class SearchSolver(BaseSolver):
-    def __init__(self, config: Config, start_time):
-        super().__init__(config, start_time)
+    def __init__(self, config: Config, timer: AlgoTimer):
+        super().__init__(config, timer)
 
         self.best_leaf_node: ProblemNode = None
         self.current_best: ProblemNode = None
@@ -95,7 +96,11 @@ class SearchSolver(BaseSolver):
                 "show_data": self.data_holder.visual_detail_info}
 
     def do_solve(self):
+
+        self.timer.check_point("do_basic_analyze", "start")
         self.analyzer.do_basic_analyze()
+        self.timer.check_point("do_basic_analyze", "end")
+
         # 这里把foil的不可行变成可行 存到了current_solution_map里
         foil_must_be_feasible_arc = do_foil_must_be_feasible(self)
 
@@ -112,13 +117,13 @@ class SearchSolver(BaseSolver):
         open_queue = PriorityQueue()
         open_queue.put(root_problem)
         closed_set = set()
+
+        self.timer.check_point("root problem")
+
         # 后续可用 closed_set 记录已探索节点
         while not open_queue.empty():
-            if time_over_check(self.start_time, self.time_limit):
-                elapsed = int(time.time() - self.start_time)
-                minutes = elapsed // 60
-                seconds = elapsed % 60
-                print(f"time limit reached ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
+            if self.timer.time_over_check():
+                self.timer.time_to_start(f"best:{self.best_leaf_node}")
                 break
 
             problem = open_queue.get()
@@ -129,15 +134,12 @@ class SearchSolver(BaseSolver):
                 if self.best_leaf_node is None:
                     self.best_leaf_node = problem
 
-                    elapsed = int(time.time() - self.start_time)
-                    minutes = elapsed // 60
-                    seconds = elapsed % 60
-
-                    print(f"first found feasible solution ({minutes}分{seconds}秒) best:{self.best_leaf_node}")
+                    self.timer.time_to_start(f"first found feasible solution best:{self.best_leaf_node}")
 
                 elif problem.better_than_other(self.best_leaf_node):
                     # 找到可行解之后看看有没有更优解
                     self.best_leaf_node = problem
+                    self.timer.time_to_start(f"found better solution better:{self.best_leaf_node}")
 
                 continue
 
@@ -151,7 +153,8 @@ class SearchSolver(BaseSolver):
             modify_result_set = generate_multi_modify_arc_by_graph_feature(self, info, problem, df_path_fact,
                                                                            org_bc_dict)
 
-            print(problem)
+            self.timer.check_point(f"branch from {problem}")
+
             for modify_arc in modify_result_set:
                 # todo 这里不可能不命中，至少起点和终点是一样的
                 sub_problem = ProblemNode(self, info, [modify_arc], problem.map_df, problem.new_graph, problem,
@@ -173,12 +176,16 @@ class SearchSolver(BaseSolver):
 
                 open_queue.put(sub_problem)
 
+            self.timer.check_point(f"solve child {problem}")
+
         if self.best_leaf_node is None:
             if self.current_best is None:
                 self.best_leaf_node = root_problem
+                self.timer.time_to_start(f"root problem return:{self.best_leaf_node}")
             else:
                 # 如果没找到可行解  就返回当前最好的解
                 self.best_leaf_node = self.current_best
+                self.timer.time_to_start(f"infeasible solution return:{self.best_leaf_node}")
 
     def generate_sub_fact(self, info_tuple):
         nodes = info_tuple['fact_sub_path']

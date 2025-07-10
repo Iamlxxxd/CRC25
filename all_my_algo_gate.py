@@ -35,10 +35,11 @@ mip_visual_path = os.path.join(out_path, "mip")
 search_visual_path = os.path.join(out_path, "search")
 hybrid_visual_path = os.path.join(out_path, "hybrid")
 
+from AlgoTimer import AlgoTimer
+
 
 def single_mip(route_name=None):
-    start_time = time.time()
-
+    timer = AlgoTimer(time.time())
     set_seed()
 
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -53,7 +54,7 @@ def single_mip(route_name=None):
 
     config.load_from_yaml()
 
-    solver = MipSolver(config, start_time)
+    solver = MipSolver(config, timer)
     solver.init_from_config()
 
     solver.init_model()
@@ -71,7 +72,7 @@ def single_mip(route_name=None):
 
 
 def single_search(route_name=None):
-    start_time = time.time()
+    timer = AlgoTimer(time.time())
     set_seed()
 
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -86,7 +87,7 @@ def single_search(route_name=None):
 
     config.load_from_yaml()
 
-    solver = SearchSolver(config, start_time)
+    solver = SearchSolver(config, timer)
     solver.init_from_config()
 
     solver.do_solve()
@@ -103,7 +104,7 @@ def single_search(route_name=None):
 
 
 def single_hybrid(route_name=None):
-    start_time = time.time()
+    timer = AlgoTimer(time.time())
     set_seed()
 
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -118,7 +119,7 @@ def single_hybrid(route_name=None):
 
     config.load_from_yaml()
 
-    mip_solver = MipSolver(config, start_time)
+    mip_solver = MipSolver(config, timer)
     mip_solver.init_from_config()
 
     mip_solver.init_model()
@@ -135,7 +136,7 @@ def single_hybrid(route_name=None):
 
         return mip_solver.out_put_df, mip_solver.out_put_op_list
 
-    search_solver = SearchSolver(config, start_time)
+    search_solver = SearchSolver(config, timer)
     search_solver.init_from_other_solver(mip_solver)
     search_solver.do_solve()
 
@@ -149,7 +150,7 @@ def single_hybrid(route_name=None):
 
 
 def single_mip_from_args(args):
-    start_time = time.time()
+    timer = AlgoTimer(time.time())
 
     set_seed()
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -160,7 +161,7 @@ def single_mip_from_args(args):
 
     config.out_path = out_path
 
-    solver = MipSolver(config, start_time)
+    solver = MipSolver(config, timer)
     solver.init_from_config()
 
     solver.init_model()
@@ -178,7 +179,7 @@ def single_mip_from_args(args):
 
 
 def single_search_from_args(args):
-    start_time = time.time()
+    timer = AlgoTimer(time.time())
     set_seed()
 
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -191,7 +192,7 @@ def single_search_from_args(args):
 
     config.load_from_yaml()
 
-    solver = SearchSolver(config, start_time)
+    solver = SearchSolver(config, timer)
     solver.init_from_config()
 
     solver.do_solve()
@@ -208,7 +209,7 @@ def single_search_from_args(args):
 
 
 def single_hybrid_from_args(args):
-    start_time = time.time()
+    timer = AlgoTimer(time.time())
     set_seed()
 
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -221,7 +222,7 @@ def single_hybrid_from_args(args):
 
     config.load_from_yaml()
 
-    mip_solver = MipSolver(config, start_time)
+    mip_solver = MipSolver(config, timer)
     mip_solver.init_from_config()
 
     mip_solver.init_model()
@@ -233,12 +234,16 @@ def single_hybrid_from_args(args):
         os.makedirs(hybrid_visual_path, exist_ok=True)
         visual_map_foil_modded(mip_solver.process_visual_data(), hybrid_visual_path, config.route_name + "_mip")
 
-    if mip_solver.route_error <= 0 and mip_solver.graph_error <= 1:
+    if (mip_solver.route_error <= 0 and mip_solver.graph_error <= 1):
         # 改一条边或者不改 已经是最优了  不需要继续搜了 搜也不可能搜到更好的
 
         return mip_solver.out_put_df, mip_solver.out_put_op_list
 
-    search_solver = SearchSolver(config, start_time)
+    if timer.time_over_check():
+        timer.time_to_start("mip over time")
+        # mip超时了
+        return mip_solver.out_put_df, mip_solver.out_put_op_list
+    search_solver = SearchSolver(config, timer)
     search_solver.init_from_other_solver(mip_solver)
     search_solver.do_solve()
 
@@ -249,4 +254,3 @@ def single_hybrid_from_args(args):
                                config.route_name)
 
     return search_solver.out_put_df, search_solver.out_put_op_list
-
