@@ -6,21 +6,21 @@
 @project:    CRC25
 """
 from copy import deepcopy
-from geopandas import GeoDataFrame
-import pandas as pd
-import numpy as np
 
+import numpy as np
+import pandas as pd
+from geopandas import GeoDataFrame
 from shapely import to_wkt
 
 from config import Config
-from src.DataHolder import DataHolder
-from src.calc.router import Router
-from src.utils.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
-from src.utils.common_utils import correct_arc_direction
-from src.solver.ArcModifyTag import ArcModifyTag
-from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
-from src.utils.dataparser import convert
 from src.AlgoTimer import AlgoTimer
+from src.DataHolder import DataHolder
+from src.calc.metrics import get_virtual_op_list, common_edges_similarity_route_df_weighted
+from src.calc.router import Router
+from src.solver.ArcModifyTag import ArcModifyTag
+from src.utils.common_utils import correct_arc_direction
+from src.utils.dataparser import convert
+from src.utils.dataparser import handle_weight, handle_weight_with_recovery, create_network_graph
 
 
 class BaseSolver:

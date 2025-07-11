@@ -11,7 +11,6 @@ import contextily as cx
 import geopandas as gpd
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-import pandas as pd
 
 
 def visual_line(visual_dict: dict):
@@ -160,7 +159,6 @@ def visual_map_explore(visual_dict: dict,file_path):
       <span style="display:inline-block;width:12px;height:12px;background:red;border-radius:6px;display:inline-block;margin-right:5px;"></span>Destination<br>
     </div>
     """
-    from folium import Map
     if hasattr(m, 'get_root'):
         m.get_root().html.add_child(branca.element.Element(legend_html))
 
@@ -308,7 +306,6 @@ def visual_map_foil_modded(visual_dict: dict, file_path,tag,rec_arcs=None):
 
 
 def visual_sub_problem(visual_dict: dict, file_path, tag):
-    import geopandas as gpd
     import branca
     import folium
 

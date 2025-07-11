@@ -8,12 +8,14 @@
 
 import os
 import sys
-import yaml
 import time
-from multiprocessing import Process, Queue
 import traceback
-from visual import visual_map_foil_modded
 from copy import deepcopy
+from multiprocessing import Process, Queue
+
+import yaml
+
+from visual import visual_map_foil_modded
 
 # 获取当前文件所在目录（即submission目录）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

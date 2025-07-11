@@ -6,7 +6,7 @@
 @project:    CRC25
 """
 
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 
 
 class DataAnalyzer:

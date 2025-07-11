@@ -1,8 +1,9 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import momepy
-import pandas as pd
 import geopandas as gpd
+import momepy
+import numpy as np
+import pandas as pd
+
+
 def convert_to_numerical(value):
     # Convert path_type to numerical value
     if value == "walk":

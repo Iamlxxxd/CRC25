@@ -1,7 +1,6 @@
 import logging
 import logging.handlers
 import os
-import threading
 from datetime import datetime
 
 def setup_logger(name="CRC25", log_dir="log"):

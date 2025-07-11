@@ -9,6 +9,7 @@ from collections import defaultdict
 import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import dok_matrix
+
 from config import Config
 from src.solver.ArcModifyTag import ArcModifyTag
 from src.solver.BaseSolver import BaseSolver

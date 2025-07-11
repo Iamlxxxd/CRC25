@@ -1,10 +1,10 @@
-import numpy as np
 import pandas as pd
-import shapely.ops as so
-import shapely.geometry as sg
-import geopandas as gpd
-import networkx as nx
 import momepy
+import networkx as nx
+import pandas as pd
+import shapely.geometry as sg
+import shapely.ops as so
+
 
 class Router:
     def __init__(self, heuristic="dijkstra", CRS=None, CRS_map=None):

@@ -1,6 +1,3 @@
-import os
-import sys
-
 # 在所有入口文件（如 submission_template.py）顶部添加：
 import os
 import sys
@@ -14,8 +11,6 @@ sys.path.append(ROOT_DIR)  # 将项目根目录加入路径
 import argparse
 import json
 
-from config import Config
-from src.solver.SearchSolver import SearchSolver
 from all_my_algo_gate import multi_job
 
 

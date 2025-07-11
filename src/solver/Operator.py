@@ -6,9 +6,10 @@
 @project:    CRC25
 """
 
-import networkx as nx
-from typing import List
 import random
+from typing import List
+
+import networkx as nx
 
 from .ArcModifyTag import ArcModifyTag
 

@@ -10,10 +10,8 @@ import math
 import os
 import random
 from collections import defaultdict
-from operator import truediv
 
 import geopandas as gpd
-
 import numpy as np
 
 

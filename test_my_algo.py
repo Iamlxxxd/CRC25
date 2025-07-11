@@ -8,11 +8,7 @@
 
 import os
 import sys
-import yaml
 from unittest import TestCase
-import time
-
-from visual import visual_map_foil_modded
 
 # 获取当前文件所在目录（即submission目录）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,10 +16,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 sys.path.append(ROOT_DIR)  # 将项目根目录加入路径
 
-from src.solver.MipSolver import MipSolver
-from config import Config
-from src.solver.SearchSolver import SearchSolver
-from src.utils.common_utils import set_seed
 from all_my_algo_gate import *
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
