@@ -3,7 +3,7 @@ from logger_config import logger
 
 
 class AlgoTimer:
-    time_limit = 295  # 留5s写文件
+    time_limit = 290  # 留10s写文件
 
     def __init__(self, start_time):
         """

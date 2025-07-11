@@ -16,18 +16,13 @@ import json
 
 from config import Config
 from src.solver.SearchSolver import SearchSolver
-from utils.dataparser import convert_op_list_to_wkt
+from all_my_algo_gate import multi_job
+
 
 def get_results(args):
-    config = Config()
-    config.load_from_args(args)
-
-    solver = SearchSolver(config)
-    solver.do_solve()
-
-    solver.process_solution_from_model()
-    map_df = solver.out_put_df
-    op_list = solver.out_put_op_list
+    return_result = multi_job(args)
+    map_df = return_result['map_df']
+    op_list = return_result['op_list']
     return map_df, op_list
 
 

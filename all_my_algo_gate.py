@@ -11,7 +11,7 @@ import sys
 import yaml
 import time
 from multiprocessing import Process, Queue
-
+import traceback
 from visual import visual_map_foil_modded
 from copy import deepcopy
 
@@ -270,8 +270,13 @@ def single_hybrid_from_args(args):
         visual_map_foil_modded(search_solver.process_visual_data(), hybrid_visual_path,
                                config.route_name)
 
-    return {"map_df": search_solver.out_put_df, "op_list": search_solver.out_put_op_list,
-            "error": (search_solver.route_error, search_solver.graph_error)}
+    if (search_solver.route_error, search_solver.graph_error) <= (mip_solver.route_error, mip_solver.graph_error):
+
+        return {"map_df": search_solver.out_put_df, "op_list": search_solver.out_put_op_list,
+                "error": (search_solver.route_error, search_solver.graph_error)}
+    else:
+        return {"map_df": mip_solver.out_put_df, "op_list": mip_solver.out_put_op_list,
+                "error": (mip_solver.route_error, mip_solver.graph_error)}
 
 
 def _run_search_worker(args, result_queue):
@@ -280,6 +285,7 @@ def _run_search_worker(args, result_queue):
         result_dict = single_search_from_args(args)
         result_queue.put(('search', result_dict))
     except Exception as e:
+        logger.error(f"search error: {traceback.format_exc(limit=99999)}")
         result_queue.put(('search', None, str(e)))
 
 
@@ -289,6 +295,7 @@ def _run_hybrid_worker(args, result_queue):
         result_dict = single_hybrid_from_args(args)
         result_queue.put(('hybrid', result_dict))
     except Exception as e:
+        logger.error(f"hybrid error: {traceback.format_exc(limit=99999)}")
         result_queue.put(('hybrid', None, str(e)))
 
 
@@ -305,11 +312,11 @@ def _compare_results(search_result, hybrid_result):
     search_error = search_result.get("error", (float("inf"), float("inf")))
     hybrid_error = hybrid_result.get("error", (float("inf"), float("inf")))
 
-    if search_error < hybrid_error:
-        logger.log(f"best solution from search:{str(search_error)}")
+    if search_error <= hybrid_error:
+        logger.info(f"best solution from search:{str(search_error)}")
         return search_result
     else:
-        logger.log(f"best solution from hybrid:{str(hybrid_error)}")
+        logger.info(f"best solution from hybrid:{str(hybrid_error)}")
         return hybrid_result
 
 
@@ -352,12 +359,12 @@ def multi_job(args):
 
             if len(result) == 3:  # 有异常
                 logger.error(f"{algo_type} 算法执行出错: {result[2]}")
-                results[algo_type] = (None, None)
+                results[algo_type] = None
             else:
                 results[algo_type] = result[1]
 
             collected_results += 1
-            logger.info(f"{algo_type} 算法完成")
+            logger.info(f"{algo_type} 算法完成 costTime:{time.time() - start_time}")
 
         except:
             # todo 内部报错好像不会退出

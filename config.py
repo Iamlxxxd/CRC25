@@ -99,6 +99,5 @@ class Config:
     def load_params(self):
         self.heuristic = self.config['params']['heuristic']
         self.heuristic_f = self.config['params']['heuristic_f']
-        self.time_limit = self.config['params']['time_limit']
         self.store_path = self._full_path(self.config['paths'].get('store_path', './outputs/'))
         self.visual = self.config['params']['visual']
