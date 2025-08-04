@@ -18,6 +18,7 @@ def get_results(args):
     return_result = multi_job(args)
     map_df = return_result['map_df']
     op_list = return_result['op_list']
+    # print(map_df.shape, op_list)
     return map_df, op_list
 
 

@@ -204,7 +204,7 @@ def single_search_from_args(args):
 
     config.out_path = out_path
 
-    config.load_from_yaml()
+    # config.load_from_yaml()
 
     solver = SearchSolver(config, timer)
     solver.init_from_config()
@@ -236,7 +236,7 @@ def single_hybrid_from_args(args):
 
     config.out_path = out_path
 
-    config.load_from_yaml()
+    # config.load_from_yaml()
 
     mip_solver = MipSolver(config, timer)
     mip_solver.init_from_config()
