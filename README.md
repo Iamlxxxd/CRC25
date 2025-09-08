@@ -7,6 +7,19 @@ Welcome to the official repository for the [**Counterfactual Routing Competition
 
 ---
 
+
+# Competition Results
+
+**Winner:** Zejian Chen, Jintao You, Xiaodong Luo  
+**Runner-up 1:** Linxin Yang, Zhongshan Gao, Jingyi Zhao, Xiaodong Luo, Dong Zhang, Juan Chen, Haohan Huang  
+**Runner-up 2:** Dmitry Konovalov, Alexander Yuskov, Igor Kulachenko, Andrey Melnikov, Igor Vasilyev, Haohan Huang, Juan Chen, Dong Zhang  
+
+**Details:**  
+- [Test Dataset](./data/test/)  
+- [Results](./results)  
+
+---
+
 ## Table of Contents
 
 - [About the Competition](#about-the-competition)
@@ -56,11 +69,11 @@ Participants will be provided with:
 **Key Dates:**
 
 - ~~**Competition Submission Deadline:** July 10, 2025~~
-- **Code Submission Deadline:** July 17, 2025
-- **Report Submission Deadline:** July 24, 2025
-- **Competition Results Release:** July 30, 2025
-- **Announcement of Presentation Slots:** August 5, 2025
-- **Results Presentation and Winner Announcement:** at IJCAI 2025
+- ~~**Code Submission Deadline:** July 17, 2025~~
+- ~~**Report Submission Deadline:** July 24, 2025~~
+- ~~**Competition Results Release:** July 30, 2025~~
+- ~~**Announcement of Presentation Slots:** August 5, 2025~~
+- ~~**Results Presentation and Winner Announcement:** at IJCAI 2025~~
 
 *All submission deadlines are at 23:59h AoE (Anywhere on Earth).*
 
