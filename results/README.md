@@ -32,7 +32,7 @@ Please check the [test dataset](../data/test/).
 
 ### **Team E**  
 **Members:** Linxin Yang, Zhongshan Gao, Jingyi Zhao, Xiaodong Luo, Dong Zhang, Juan Chen, Haohan Huang  
-**Code:** TBD
+**Code:** https://github.com/CenturionMKIII/CRC25_SRIBD
 
 ---
 
