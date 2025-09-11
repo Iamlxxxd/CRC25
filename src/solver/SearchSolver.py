@@ -20,6 +20,7 @@ from src.solver.BaseSolver import BaseSolver
 from src.solver.Operator import do_foil_must_be_feasible, generate_multi_modify_arc_by_graph_feature
 from src.solver.ProblemNode import ProblemNode
 from src.utils.common_utils import correct_arc_direction, extract_nodes, edge_betweenness_to_target_multigraph
+import time
 
 
 class SearchSolver(BaseSolver):
@@ -28,6 +29,8 @@ class SearchSolver(BaseSolver):
 
         self.best_leaf_node: ProblemNode = None
         self.current_best: ProblemNode = None
+
+        self.experiments_statistics = dict()
 
     def init_from_config(self):
         super().init_from_config()
@@ -118,6 +121,7 @@ class SearchSolver(BaseSolver):
 
         self.timer.check_point("SearchSolver", "root problem")
 
+        start_time = time.time()
         # 后续可用 closed_set 记录已探索节点
         while not open_queue.empty():
             if self.timer.time_over_check():
@@ -129,12 +133,19 @@ class SearchSolver(BaseSolver):
             closed_set.add(problem)
 
             if problem.route_error <= 0:
+
+                if "feasible num" in self.experiments_statistics:
+                    self.experiments_statistics["feasible num"] += 1
+                else:
+                    self.experiments_statistics["feasible num"] = 1
+
                 if self.best_leaf_node is None:
                     self.best_leaf_node = problem
 
                     self.timer.time_to_start("SearchSolver",
                                              f"first found feasible solution best:{self.best_leaf_node}")
 
+                    self.experiments_statistics['first feasible solution'] = time.time() - start_time
                 elif problem.better_than_other(self.best_leaf_node):
                     # 找到可行解之后看看有没有更优解
                     self.best_leaf_node = problem
@@ -187,6 +198,11 @@ class SearchSolver(BaseSolver):
                 # 如果没找到可行解  就返回当前最好的解
                 self.best_leaf_node = self.current_best
                 self.timer.time_to_start("SearchSolver", f"infeasible solution return:{self.best_leaf_node}")
+
+        self.experiments_statistics['node num'] = len(closed_set) + open_queue.qsize()
+        self.experiments_statistics['total time'] = time.time() - start_time
+        self.experiments_statistics['route_error'] = self.best_leaf_node.route_error
+        self.experiments_statistics['graph_error'] = self.best_leaf_node.graph_error
 
     def generate_sub_fact(self, info_tuple):
         nodes = info_tuple['fact_sub_path']
