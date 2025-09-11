@@ -1,5 +1,6 @@
 import json
 import os
+import pickle
 
 import geopandas as gpd
 import pandas as pd
@@ -27,7 +28,7 @@ class Config:
         self.load_network_data()
         self.load_foil_data()
         self.load_params()
-    
+
     def load_from_args(self, args):
         # 从args中加载网络数据
         self._load_network_data_from_args(args)
@@ -68,7 +69,8 @@ class Config:
 
     def load_network_data(self):
         # 读取metadata.json
-        meta_data_path = self._full_path("data/train/routes", self.route_name, "metadata.json")
+        routes_path = self.paths.get('routes_path', 'data/train/routes')
+        meta_data_path = self._full_path(routes_path, self.route_name, "metadata.json")
         with open(meta_data_path, 'r') as f:
             self.meta_data = json.load(f)
         self.meta_map = self.meta_data["map"]
@@ -78,28 +80,53 @@ class Config:
 
         # 地图文件名
         map_filename = self.meta_map["map_name"]
-        self.basic_network_path = self._full_path("data/train/maps", map_filename)
+        maps_path = self.paths.get('maps_path', 'data/train/maps')
+        self.basic_network_path = self._full_path(maps_path, map_filename)
         self.basic_network: GeoDataFrame = gpd.read_file(self.basic_network_path)
 
         # 起终点坐标csv路径
-        self.gdf_coords_path = self._full_path("data/train/routes", self.route_name, "route_start_end.csv")
+        self.gdf_coords_path = self._full_path(routes_path, self.route_name, "route_start_end.csv")
         self.gdf_coords_loaded: pd.DataFrame = pd.read_csv(self.gdf_coords_path, sep=';')
         self.gdf_coords_loaded['geometry'] = self.gdf_coords_loaded['geometry'].apply(wkt.loads)
         self.gdf_coords_loaded: GeoDataFrame = gpd.GeoDataFrame(self.gdf_coords_loaded, geometry='geometry')
 
     def load_foil_data(self):
-        # foil路径节点json文件路径
-        self.foil_json_path = self._full_path("data/train/routes", self.route_name, "foil_route.json")
-        with open(self.foil_json_path, 'r') as f:
-            self.path_foil = json.load(f)
+        routes_path = self.paths.get('routes_path', 'data/train/routes')
 
+        # foil路径节点json文件路径
+        self.__load_foil_path(routes_path)
         # foil路径文件路径
-        self.df_path_foil_path = self._full_path("data/train/routes", self.route_name, "foil_route.gpkg")
-        self.df_path_foil: GeoDataFrame = gpd.read_file(self.df_path_foil_path)
-        self.df_path_foil = ensure_crs(self.df_path_foil, self.meta_map["CRS"])
+        self.__load_foil_data(routes_path)
 
     def load_params(self):
         self.heuristic = self.config['params']['heuristic']
         self.heuristic_f = self.config['params']['heuristic_f']
         self.store_path = self._full_path(self.config['paths'].get('store_path', './outputs/'))
         self.visual = self.config['params']['visual']
+
+    def __load_foil_path(self, routes_path):
+        try:
+            # foil路径节点json文件路径
+            self.foil_json_path = self._full_path(routes_path, self.route_name, "foil_route.json")
+            with open(self.foil_json_path, 'r') as f:
+                self.path_foil = json.load(f)
+
+            f.close()
+        except Exception as e:
+            self.foil_json_path = self._full_path(routes_path, self.route_name, "node_foil_route.pkl")
+            with open(self.foil_json_path, "rb") as f:
+                self.path_foil = pickle.load(f)
+            f.close()
+
+    def __load_foil_data(self, routes_path):
+        try:
+
+            self.df_path_foil_path = self._full_path(routes_path, self.route_name, "foil_route.gpkg")
+            self.df_path_foil: GeoDataFrame = gpd.read_file(self.df_path_foil_path)
+        except Exception as e:
+            self.df_path_foil_path = self._full_path(routes_path, self.route_name, "foil_route.pkl")
+            with open(self.df_path_foil_path, "rb") as f:
+                self.df_path_foil = pickle.load(f)
+            f.close()
+
+        self.df_path_foil = ensure_crs(self.df_path_foil, self.meta_map["CRS"])

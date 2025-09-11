@@ -1,10 +1,12 @@
 paths:
-  route_name: osdpm_0_3 # 指定routes下的文件夹名
+  route_name: nwmkt_t_0_5 # 指定routes下的文件夹名
   #osdpm_0_3 osdpm_0_2 osdpm_0_5 osdpm_4_1
+  routes_path: data/test/nwmkt  # 路线路径
+  maps_path: data/test/maps      # 地图路径
   store_path: outputs/
 
 params:
   heuristic: dijkstra
   heuristic_f: my_weight
-  visual: False
+  visual: True
   time_limit: 290  # 单位：秒

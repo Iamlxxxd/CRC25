@@ -32,7 +32,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(current_dir, "config.yaml")
 
 base_dir = os.path.abspath(current_dir)
-out_path = os.path.join(base_dir, "my_demo", "output", "submission_out")
+out_path = os.path.join(base_dir, "my_demo", "output", "retest")
 
 mip_visual_path = os.path.join(out_path, "mip")
 search_visual_path = os.path.join(out_path, "search")
