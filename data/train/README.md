@@ -1,6 +1,6 @@
-# Amsterdam Osdpm Area Counterfactual Routing Dataset
+# Amsterdam Osdorp-Midden area Counterfactual Routing Dataset
 
-This dataset provides geographic data in the Osdpm area of Amsterdam.
+This dataset provides geographic data in the Osdorp-Midden area of Amsterdam.
 
 ---
 
