@@ -10,6 +10,8 @@ import os
 import sys
 from unittest import TestCase
 
+import pandas as pd
+from logger_config import logger
 # 获取当前文件所在目录（即submission目录）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 获取项目根目录（即submission的父目录）
@@ -23,6 +25,7 @@ config_path = os.path.join(current_dir, "config.yaml")
 
 base_dir = os.path.abspath(current_dir)
 out_path = os.path.join(base_dir, "my_demo", "output", "submission_out")
+experiments_path = os.path.join(base_dir, "my_demo", "output", "experiments")
 
 mip_visual_path = os.path.join(out_path, "mip")
 search_visual_path = os.path.join(out_path, "search")
@@ -42,12 +45,71 @@ import argparse
 
 my_args = argparse.Namespace(**test_args)
 
+
+def run_single(route_name):
+    try:
+        print(f"Testing route: {route_name}")
+        result = single_hybrid(route_name=route_name)
+
+        experiments_dict = result.get('experiments_dict', dict())
+        experiments_dict['route_name'] = route_name
+        logger.info(f"Result for {route_name}: {experiments_dict}")
+    except Exception as e:
+        experiments_dict = dict()
+        experiments_dict['route_name'] = route_name
+        logger.info(f"ERROR {route_name} exception: {e}")
+
+    return experiments_dict
+
+
 class Test(TestCase):
     def test_mip(self):
         return_result = single_mip()
 
     def test_search(self):
         return_result = single_search()
+
+    def test_search_batch(self):
+        routes_dir = os.path.join(base_dir, "data/test/osdpm")
+        route_names = [name for name in os.listdir(routes_dir) if os.path.isdir(os.path.join(routes_dir, name))]
+
+        import multiprocessing
+
+        with multiprocessing.Pool(10) as pool:
+            final_result = pool.map(run_single, route_names)
+
+        final_result_df = pd.DataFrame(final_result)
+        tag = "re_test"
+
+        excel_path = os.path.join(experiments_path, "test.xlsx")
+
+        # 确保 experiments_path 目录存在
+        os.makedirs(experiments_path, exist_ok=True)
+
+        # 检查文件是否为合法excel，否则删除重建
+        from openpyxl import load_workbook
+        def is_valid_excel(path):
+            try:
+                load_workbook(path)
+                return True
+            except Exception:
+                return False
+
+        if os.path.exists(excel_path) and not is_valid_excel(excel_path):
+            os.remove(excel_path)
+
+        # 写入excel的指定sheet，保留其他sheet
+        if os.path.exists(excel_path):
+            with pd.ExcelWriter(excel_path, engine='openpyxl', mode='a') as writer:
+                # 删除已存在的sheet
+                try:
+                    writer.book.remove(writer.book[tag])
+                except Exception:
+                    pass
+                final_result_df.to_excel(writer, sheet_name=tag, index=False)
+        else:
+            with pd.ExcelWriter(excel_path, engine='openpyxl', mode='w') as writer:
+                final_result_df.to_excel(writer, sheet_name=tag, index=False)
 
     def test_hybrid(self):
         return_result = single_hybrid()

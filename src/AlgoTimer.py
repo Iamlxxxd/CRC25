@@ -39,8 +39,10 @@ class AlgoTimer:
 
         # 更新上次检查点时间为当前时间
         self.last_check_time = current_time
+        return elapsed_time
 
     def time_to_start(self, *args):
         message = ' '.join(str(arg) for arg in args)
         elapsed_time = time.time() - self.start_time
         logger.info(f"{message} 距离开始: {elapsed_time:.3f}秒")
+        return elapsed_time

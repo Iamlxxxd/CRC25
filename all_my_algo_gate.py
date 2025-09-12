@@ -14,7 +14,7 @@ from copy import deepcopy
 from multiprocessing import Process, Queue
 
 import yaml
-
+from logger_config import logger
 from visual import visual_map_foil_modded
 
 # 获取当前文件所在目录（即submission目录）
@@ -104,7 +104,8 @@ def single_search(route_name=None):
         os.makedirs(search_visual_path, exist_ok=True)
         visual_map_foil_modded(solver.process_visual_data(), search_visual_path, config.route_name)
 
-    return {"map_df": map_df, "op_list": op_list, "error": (solver.route_error, solver.graph_error)}
+    return {"map_df": map_df, "op_list": op_list, "error": (solver.route_error, solver.graph_error),
+            "experiments_dict": solver.experiments_statistics}
 
 
 def single_hybrid(route_name=None):
@@ -127,7 +128,9 @@ def single_hybrid(route_name=None):
     mip_solver.init_from_config()
 
     mip_solver.init_model()
+    mip_start = time.time()
     mip_solver.solve_model()
+    mip_cost = time.time() - mip_start
 
     mip_solver.process_solution_from_model()
 
@@ -138,8 +141,13 @@ def single_hybrid(route_name=None):
     if (mip_solver.route_error <= 0 and mip_solver.graph_error <= 1):
         # 改一条边或者不改 已经是最优了  不需要继续搜了 搜也不可能搜到更好的
 
+        experiments_statistics = dict()
+        experiments_statistics['route_error'] = mip_solver.route_error
+        experiments_statistics['graph_error'] = mip_solver.graph_error
+        experiments_statistics['mip_cost'] = mip_cost
+        experiments_statistics['final'] = "mip"
         return {"map_df": mip_solver.out_put_df, "op_list": mip_solver.out_put_op_list,
-                "error": (mip_solver.route_error, mip_solver.graph_error)}
+                "error": (mip_solver.route_error, mip_solver.graph_error), "experiments_dict": experiments_statistics}
 
     if timer.time_over_check():
         timer.time_to_start("mip over time")
@@ -147,6 +155,7 @@ def single_hybrid(route_name=None):
         return {"map_df": mip_solver.out_put_df, "op_list": mip_solver.out_put_op_list,
                 "error": (mip_solver.route_error, mip_solver.graph_error)}
 
+    timer = AlgoTimer(time.time())
     search_solver = SearchSolver(config, timer)
     search_solver.init_from_other_solver(mip_solver)
     search_solver.do_solve()
@@ -157,8 +166,24 @@ def single_hybrid(route_name=None):
         visual_map_foil_modded(search_solver.process_visual_data(), hybrid_visual_path,
                                config.route_name)
 
-    return {"map_df": search_solver.out_put_df, "op_list": search_solver.out_put_op_list,
-            "error": (search_solver.route_error, search_solver.graph_error)}
+    return_dict = dict()
+    experiments_statistics = search_solver.experiments_statistics
+    if (search_solver.route_error, search_solver.graph_error) <= (mip_solver.route_error, mip_solver.graph_error):
+
+        return_dict = {"map_df": search_solver.out_put_df, "op_list": search_solver.out_put_op_list,
+                       "error": (search_solver.route_error, search_solver.graph_error)}
+        experiments_statistics['final'] = "search"
+
+    else:
+        return_dict = {"map_df": mip_solver.out_put_df, "op_list": mip_solver.out_put_op_list,
+                       "error": (mip_solver.route_error, mip_solver.graph_error)}
+        experiments_statistics['route_error'] = mip_solver.route_error
+        experiments_statistics['graph_error'] = mip_solver.graph_error
+        experiments_statistics['final'] = "mip"
+
+    experiments_statistics['mip_cost'] = mip_cost
+    return_dict.update({"experiments_dict": experiments_statistics})
+    return return_dict
 
 
 def single_mip_from_args(args):
